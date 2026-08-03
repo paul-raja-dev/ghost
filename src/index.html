@@ -63,7 +63,7 @@
       display: flex;
       align-items: center;
       height: 32px;
-      padding: 0 12px;
+      padding: 0 14px;
       border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.09);
       background: #181828;
@@ -74,12 +74,6 @@
       border-color: rgba(140, 140, 255, 0.55);
       background: #1f1f34;
       box-shadow: 0 0 0 2px rgba(140, 140, 255, 0.15);
-    }
-    #urlbar-icon {
-      font-size: 12px;
-      color: #757598;
-      margin-right: 8px;
-      flex-shrink: 0;
     }
     #urlbar {
       flex: 1;
@@ -190,7 +184,6 @@
       <button class="nav-btn" id="refresh" title="Reload">↻</button>
       
       <div id="urlbar-container">
-        <span id="urlbar-icon">🔒</span>
         <input id="urlbar" type="text" placeholder="Search with Google or enter URL..." />
       </div>
     </div>
@@ -210,7 +203,6 @@
     const newTabBtn = document.getElementById('new-tab-btn');
     const urlbar = document.getElementById('urlbar');
     const urlbarContainer = document.getElementById('urlbar-container');
-    const urlbarIcon = document.getElementById('urlbar-icon');
 
     let currentTabs = [];
     let currentActiveId = null;
@@ -299,17 +291,6 @@
     listen('url-changed', (event) => {
       urlbar.value = event.payload;
       urlbarContainer.classList.remove('loading');
-
-      if (event.payload.startsWith('https://')) {
-        urlbarIcon.textContent = '🔒';
-        urlbarIcon.style.color = '#757598';
-      } else if (event.payload.startsWith('http://')) {
-        urlbarIcon.textContent = '⚠️';
-        urlbarIcon.style.color = '#e0a030';
-      } else {
-        urlbarIcon.textContent = '🔍';
-        urlbarIcon.style.color = '#757598';
-      }
     });
 
     window.addEventListener('keydown', (e) => {
