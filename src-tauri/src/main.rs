@@ -81,32 +81,52 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
-/// Precise GTK Child Widget Packing:
-/// GTK Box manages all vertical layout positions automatically.
-/// Active tab widget gets expand=true to fill 100% of remaining space with ZERO offset gap.
+/// GtkOverlay Layout Architecture:
+/// Content webview fills 100% of the window (y=0 to bottom).
+/// Toolbar webview floats on top at top edge (y=0, height 76px).
 fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
     #[cfg(target_os = "linux")]
     {
-        if let Ok(gtk_box) = main_window.default_vbox() {
+        if let (Ok(gtk_window), Ok(gtk_box)) = (main_window.gtk_window(), main_window.default_vbox()) {
             let children = gtk_box.children();
-            if let Some(toolbar_widget) = children.get(0) {
-                toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
-                gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
-            }
+            if children.len() >= 2 {
+                let toolbar_widget = &children[0];
 
-            let active_index = state.active_id.as_ref().and_then(|active_id| {
-                state.tabs.iter().position(|t| &t.id == active_id)
-            });
+                let active_index = state.active_id.as_ref().and_then(|active_id| {
+                    state.tabs.iter().position(|t| &t.id == active_id)
+                });
 
-            // Loop over tab webview widgets (index 1..N)
-            for (idx, widget) in children.iter().skip(1).enumerate() {
-                let is_active = Some(idx) == active_index;
-                if is_active {
-                    widget.show();
-                    gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
-                } else {
-                    widget.hide();
-                    gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
+                // Show only active tab, hide inactive ones
+                for (idx, widget) in children.iter().skip(1).enumerate() {
+                    let is_active = Some(idx) == active_index;
+                    if is_active {
+                        widget.show();
+                    } else {
+                        widget.hide();
+                    }
+                }
+
+                // Setup overlay if not yet created
+                if gtk_box.parent().is_some() && children.len() >= 2 {
+                    let active_widget = active_index.and_then(|idx| children.get(idx + 1));
+                    if let Some(content_widget) = active_widget {
+                        gtk_box.remove(toolbar_widget);
+                        gtk_box.remove(content_widget);
+
+                        let overlay = gtk::Overlay::new();
+                        overlay.add(content_widget);
+                        overlay.add_overlay(toolbar_widget);
+
+                        toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
+                        toolbar_widget.set_valign(gtk::Align::Start);
+                        toolbar_widget.set_halign(gtk::Align::Fill);
+
+                        content_widget.set_valign(gtk::Align::Fill);
+                        content_widget.set_halign(gtk::Align::Fill);
+
+                        gtk_box.pack_start(&overlay, true, true, 0);
+                        gtk_window.show_all();
+                    }
                 }
             }
         }
@@ -229,7 +249,6 @@ fn create_tab(
     )
     .devtools(true);
 
-    // In GTK Box layout, LogicalPosition must be (0,0) because GtkBox handles position automatically
     let _ = main_window.add_child(
         builder,
         LogicalPosition::new(0.0, 0.0),
