@@ -29,12 +29,11 @@
       align-items: center;
       gap: 12px;
       width: 90%;
-      max-width: 620px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(57, 255, 20, 0.22);
-      border-radius: 8px;
-      padding: 14px 20px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(57, 255, 20, 0.08);
+      max-width: 600px;
+      background: transparent;
+      border: none;
+      padding: 0;
+      box-shadow: none;
       cursor: text;
     }
 
@@ -57,16 +56,12 @@
       user-select: text;
       -webkit-user-select: text;
     }
-
-    #cli-input::placeholder {
-      color: #2a4034;
-    }
   </style>
 </head>
 <body>
   <div class="terminal-prompt" id="prompt-box">
     <span class="prompt-symbol">ghost >></span>
-    <input id="cli-input" type="text" autofocus autocomplete="off" spellcheck="false" placeholder="type URL or search..." />
+    <input id="cli-input" type="text" autofocus autocomplete="off" spellcheck="false" />
   </div>
 
   <script>
@@ -78,7 +73,6 @@
       cliInput.focus();
     }
 
-    // Ensure focus immediately
     window.addEventListener('DOMContentLoaded', focusInput);
     window.addEventListener('load', focusInput);
     setTimeout(focusInput, 50);
