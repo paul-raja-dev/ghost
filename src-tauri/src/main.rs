@@ -1,6 +1,6 @@
 #![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 
-use tauri::{Emitter, Manager, WebviewUrl, WebviewBuilder, LogicalPosition, LogicalSize};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewBuilder, LogicalPosition, LogicalSize, WindowEvent};
 use url::Url;
 
 const TOOLBAR_HEIGHT: f64 = 46.0;
@@ -63,19 +63,16 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
         let scale_factor = main_window.scale_factor().map_err(|e| e.to_string())?;
         let size = physical_size.to_logical::<f64>(scale_factor);
 
-        // Resize the toolbar webview to only 46px tall — by default it fills the
-        // entire window and its opaque background covers the content webview
+        // Explicitly fix toolbar size (height: 46px) and position (0, 0)
         if let Some(toolbar) = app_handle.get_webview("main") {
-            toolbar
-                .set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT))
-                .map_err(|e| e.to_string())?;
+            let _ = toolbar.set_position(LogicalPosition::new(0.0, 0.0));
+            let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
         }
 
         let builder = WebviewBuilder::new(
             "content",
             WebviewUrl::External(url_parsed),
-        )
-        .auto_resize();
+        );
 
         main_window
             .add_child(
@@ -83,7 +80,7 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
                 LogicalPosition::new(0.0, TOOLBAR_HEIGHT),
                 LogicalSize::new(
                     size.width,
-                    size.height - TOOLBAR_HEIGHT,
+                    (size.height - TOOLBAR_HEIGHT).max(0.0),
                 ),
             )
             .map_err(|e| e.to_string())?;
@@ -132,6 +129,28 @@ fn reload(app_handle: tauri::AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![navigate, go_back, go_forward, reload])
+        .on_window_event(|window, event| {
+            if let WindowEvent::Resized(physical_size) = event {
+                let app_handle = window.app_handle();
+                let scale_factor = window.scale_factor().unwrap_or(1.0);
+                let size = physical_size.to_logical::<f64>(scale_factor);
+
+                // Keep toolbar fixed to top (0,0) with height 46px across full width
+                if let Some(toolbar) = app_handle.get_webview("main") {
+                    let _ = toolbar.set_position(LogicalPosition::new(0.0, 0.0));
+                    let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
+                }
+
+                // Keep content webview starting right below toolbar at (0, 46px) filling remaining height
+                if let Some(content) = app_handle.get_webview("content") {
+                    let _ = content.set_position(LogicalPosition::new(0.0, TOOLBAR_HEIGHT));
+                    let _ = content.set_size(LogicalSize::new(
+                        size.width,
+                        (size.height - TOOLBAR_HEIGHT).max(0.0),
+                    ));
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
