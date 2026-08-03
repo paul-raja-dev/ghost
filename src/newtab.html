@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ghost Shell</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background-color: #0e0e14;
+      color: #e0e0eb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 600px;
+      width: 90%;
+      padding: 2rem;
+      text-align: center;
+    }
+    .colosseum-svg {
+      width: 140px;
+      height: 140px;
+      margin-bottom: 1.5rem;
+      color: #c5a059;
+      filter: drop-shadow(0 4px 12px rgba(197, 160, 89, 0.15));
+    }
+    .title {
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: 0.35em;
+      color: #f5f5fc;
+      margin: 0 0 0.4rem 0.35em;
+      text-transform: uppercase;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+      color: #787894;
+      margin-bottom: 2rem;
+      text-transform: uppercase;
+      font-weight: 400;
+    }
+    .quick-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      margin-top: 1rem;
+    }
+    .link-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      color: #b0b0c8;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
+    }
+    .link-card:hover {
+      background: rgba(197, 160, 89, 0.08);
+      border-color: rgba(197, 160, 89, 0.3);
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+    .link-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      object-fit: contain;
+    }
+    .footer-tag {
+      position: absolute;
+      bottom: 24px;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: #505068;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Minimalist Roman Colosseum Line Art SVG -->
+    <svg class="colosseum-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Outer Dome / Colosseum Contour -->
+      <path d="M 18 42 C 18 25, 82 25, 82 42 L 82 76 C 82 82, 18 82, 18 76 Z" />
+      
+      <!-- Tier 1 Arches -->
+      <path d="M 24 72 A 4 6 0 0 1 32 72 M 34 72 A 4 6 0 0 1 42 72 M 44 72 A 4 6 0 0 1 52 72 M 54 72 A 4 6 0 0 1 62 72 M 64 72 A 4 6 0 0 1 72 72" />
+      
+      <!-- Tier 2 Arches -->
+      <path d="M 24 56 A 4 6 0 0 1 32 56 M 34 56 A 4 6 0 0 1 42 56 M 44 56 A 4 6 0 0 1 52 56 M 54 56 A 4 6 0 0 1 62 56 M 64 56 A 4 6 0 0 1 72 56" />
+
+      <!-- Tier 3 Upper Windows -->
+      <path d="M 26 42 L 30 42 M 36 42 L 40 42 M 46 42 L 50 42 M 56 42 L 60 42 M 66 42 L 70 42" stroke-width="3" />
+
+      <!-- Horizontal Divider Lines -->
+      <line x1="18" y1="48" x2="82" y2="48" stroke-width="1.8" />
+      <line x1="18" y1="64" x2="82" y2="64" stroke-width="1.8" />
+
+      <!-- Base Ground Line -->
+      <line x1="12" y1="82" x2="88" y2="82" stroke-width="2.5" />
+    </svg>
+
+    <h1 class="title">Ghost</h1>
+    <div class="subtitle">Minimal Shell Architecture</div>
+
+    <div class="quick-links">
+      <a class="link-card" href="https://www.google.com">
+        <img class="link-icon" src="https://www.google.com/s2/favicons?domain=google.com&sz=32" alt="" />
+        Google
+      </a>
+      <a class="link-card" href="https://github.com">
+        <img class="link-icon" src="https://www.google.com/s2/favicons?domain=github.com&sz=32" alt="" />
+        GitHub
+      </a>
+      <a class="link-card" href="https://www.youtube.com">
+        <img class="link-icon" src="https://www.google.com/s2/favicons?domain=youtube.com&sz=32" alt="" />
+        YouTube
+      </a>
+      <a class="link-card" href="https://www.reddit.com">
+        <img class="link-icon" src="https://www.google.com/s2/favicons?domain=reddit.com&sz=32" alt="" />
+        Reddit
+      </a>
+      <a class="link-card" href="https://doc.rust-lang.org">
+        <img class="link-icon" src="https://www.google.com/s2/favicons?domain=rust-lang.org&sz=32" alt="" />
+        Rust Docs
+      </a>
+    </div>
+  </div>
+
+  <div class="footer-tag">Tauri v2 • WebKitGTK • Linux</div>
+</body>
+</html>

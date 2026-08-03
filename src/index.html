@@ -2,185 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 76px;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background: #12121e;
-      color: #e2e2f0;
-      user-select: none;
-    }
-    #toolbar {
-      display: flex;
-      flex-direction: column;
-      height: 76px;
-      background: #12121e;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    /* --- Row 1: Nav & Search Bar (42px) --- */
-    #navbar {
-      display: flex;
-      align-items: center;
-      height: 42px;
-      padding: 0 10px;
-      gap: 8px;
-      background: #0e0e18;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    }
-    .nav-btn {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
-      border: none;
-      background: transparent;
-      color: #9595b8;
-      font-size: 15px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.15s, color 0.15s;
-    }
-    .nav-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: #ffffff;
-    }
-    .nav-btn:active {
-      background: rgba(255, 255, 255, 0.15);
-    }
-
-    /* Search/URL Container */
-    #urlbar-container {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      height: 32px;
-      padding: 0 14px;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      background: #181828;
-      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-      min-width: 0;
-    }
-    #urlbar-container:focus-within {
-      border-color: rgba(140, 140, 255, 0.55);
-      background: #1f1f34;
-      box-shadow: 0 0 0 2px rgba(140, 140, 255, 0.15);
-    }
-    #urlbar {
-      flex: 1;
-      height: 100%;
-      border: none;
-      background: transparent;
-      color: #f0f0ff;
-      font-size: 13px;
-      font-weight: 400;
-      outline: none;
-      min-width: 0;
-    }
-    #urlbar::placeholder {
-      color: #606085;
-    }
-    #urlbar-container.loading {
-      border-color: rgba(80, 200, 255, 0.65);
-    }
-
-    /* --- Row 2: Tab Strip (34px) Below Search Bar --- */
-    #tabbar {
-      display: flex;
-      align-items: center;
-      height: 34px;
-      padding: 0 8px;
-      gap: 4px;
-      background: #12121e;
-      overflow-x: auto;
-    }
-    #tabbar::-webkit-scrollbar {
-      display: none;
-    }
-    .tab {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      height: 26px;
-      padding: 0 10px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      color: #8888aa;
-      font-size: 12px;
-      cursor: pointer;
-      max-width: 180px;
-      min-width: 100px;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    .tab:hover {
-      background: rgba(255, 255, 255, 0.07);
-      color: #d0d0e8;
-    }
-    .tab.active {
-      background: #202034;
-      border-color: rgba(140, 140, 255, 0.25);
-      color: #ffffff;
-      font-weight: 500;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-    }
-    .tab-favicon {
-      width: 14px;
-      height: 14px;
-      border-radius: 2px;
-      object-fit: contain;
-      flex-shrink: 0;
-    }
-    .tab-title {
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .tab-close {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      font-size: 11px;
-      color: #757598;
-      transition: background 0.15s, color 0.15s;
-    }
-    .tab-close:hover {
-      background: rgba(255, 255, 255, 0.2);
-      color: #ffffff;
-    }
-    #new-tab-btn {
-      width: 26px;
-      height: 26px;
-      border: none;
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 6px;
-      color: #8888aa;
-      font-size: 15px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.15s, color 0.15s;
-    }
-    #new-tab-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #ffffff;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="toolbar">
@@ -225,8 +47,9 @@
 
     function formatTabTitle(tab) {
       if (tab.title && !tab.title.startsWith('Tab ')) return tab.title;
+      if (tab.url && tab.url.includes('newtab.html')) return 'New Tab';
       const domain = getDomain(tab.url);
-      return domain || tab.url || 'Google';
+      return domain || tab.url || 'New Tab';
     }
 
     function renderTabs() {
@@ -239,7 +62,7 @@
         
         // Favicon Image
         const domain = getDomain(tab.url);
-        if (domain) {
+        if (domain && !tab.url.includes('newtab.html')) {
           const favEl = document.createElement('img');
           favEl.className = 'tab-favicon';
           favEl.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
@@ -303,7 +126,7 @@
     });
 
     newTabBtn.addEventListener('click', () => {
-      invoke('create_tab', { url: 'https://www.google.com' }).catch(console.error);
+      invoke('create_tab', { url: null }).catch(console.error);
     });
 
     listen('tabs-changed', (event) => {
@@ -313,30 +136,29 @@
     });
 
     listen('url-changed', (event) => {
-      urlbar.value = event.payload;
+      if (event.payload && event.payload.includes('newtab.html')) {
+        urlbar.value = '';
+      } else {
+        urlbar.value = event.payload;
+      }
       urlbarContainer.classList.remove('loading');
     });
 
-    // --- Keyboard Shortcuts ---
     window.addEventListener('keydown', (e) => {
-      // DevTools: F12 or Ctrl+Shift+I
       if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i')) {
         e.preventDefault();
         invoke('toggle_devtools').catch(console.error);
       }
-      // New Tab: Ctrl+T
       else if (e.ctrlKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
-        invoke('create_tab', { url: 'https://www.google.com' }).catch(console.error);
+        invoke('create_tab', { url: null }).catch(console.error);
       }
-      // Close Tab: Ctrl+W
       else if (e.ctrlKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         if (currentActiveId) {
           invoke('close_tab', { tabId: currentActiveId }).catch(console.error);
         }
       }
-      // Cycle Tabs: Ctrl+Tab / Ctrl+Shift+Tab
       else if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
         if (currentTabs.length > 1) {

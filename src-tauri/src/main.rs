@@ -87,8 +87,17 @@ fn create_tab(
     state: State<'_, Arc<Mutex<AppState>>>,
     url: Option<String>,
 ) -> Result<String, String> {
-    let target_url = resolve_input(url.as_deref().unwrap_or("https://www.google.com"))?;
-    let url_parsed: Url = target_url.parse().map_err(|e: url::ParseError| e.to_string())?;
+    let (target_url, webview_url) = match url {
+        Some(ref u) if !u.trim().is_empty() => {
+            let resolved = resolve_input(u)?;
+            let parsed: Url = resolved.parse().map_err(|e: url::ParseError| e.to_string())?;
+            (resolved, WebviewUrl::External(parsed))
+        }
+        _ => (
+            "newtab.html".to_string(),
+            WebviewUrl::App("newtab.html".into()),
+        ),
+    };
 
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
 
@@ -106,7 +115,7 @@ fn create_tab(
 
     let builder = WebviewBuilder::new(
         &new_tab_id,
-        WebviewUrl::External(url_parsed),
+        webview_url,
     )
     .devtools(true);
 
@@ -134,7 +143,7 @@ fn create_tab(
 
         state_guard.tabs.push(TabInfo {
             id: new_tab_id.clone(),
-            title: format!("Tab {}", new_tab_num),
+            title: if target_url == "newtab.html" { "New Tab".to_string() } else { format!("Tab {}", new_tab_num) },
             url: target_url,
         });
         state_guard.active_id = Some(new_tab_id.clone());
@@ -383,9 +392,10 @@ fn main() {
                 fix_gtk_layout(&main_window);
             }
 
+            // Spawns initial Roman Colosseum landing page (newtab.html)
             let handle = app.handle().clone();
             let state = app.state::<Arc<Mutex<AppState>>>();
-            let _ = create_tab(handle, state, Some("https://www.google.com".to_string()));
+            let _ = create_tab(handle, state, None);
 
             Ok(())
         })
