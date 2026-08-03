@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ghost Shell</title>
+  <title>Ghost</title>
   <style>
     * {
       box-sizing: border-box;
@@ -11,43 +11,42 @@
       margin: 0;
       padding: 0;
       min-height: 100vh;
-      background-color: #0e0e14;
-      color: #e0e0eb;
+      background-color: #0b0b12;
+      color: #f0f0fa;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       user-select: none;
+      overflow: hidden;
+      position: relative;
     }
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
+
+    /* Ambient atmospheric background glow */
+    .bg-aura {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(197, 160, 89, 0.07) 0%, rgba(130, 130, 255, 0.04) 45%, rgba(11, 11, 18, 0) 75%);
+      pointer-events: none;
+      border-radius: 50%;
     }
-    .title {
-      font-size: 2.2rem;
-      font-weight: 500;
-      letter-spacing: 0.4em;
-      color: #f5f5fc;
-      margin: 0 0 0.5rem 0.4em;
+
+    .wordmark {
+      font-size: 4.5rem;
+      font-weight: 600;
+      letter-spacing: 0.55em;
+      color: #f0f0fa;
+      margin: 0 0 0 0.55em;
       text-transform: uppercase;
-    }
-    .subtitle {
-      font-size: 0.8rem;
-      letter-spacing: 0.25em;
-      color: #c5a059;
-      text-transform: uppercase;
-      font-weight: 400;
-      opacity: 0.85;
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 0 0 40px rgba(197, 160, 89, 0.1);
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1 class="title">Ghost</h1>
-    <div class="subtitle">Minimal Shell Architecture</div>
-  </div>
+  <div class="bg-aura"></div>
+  <h1 class="wordmark">Ghost</h1>
 </body>
 </html>
