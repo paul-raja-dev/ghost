@@ -82,7 +82,8 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
 }
 
 /// Precise GTK Child Widget Packing:
-/// Hides all inactive GTK tab widgets so GTK Box gives 100% of remaining vertical height to the active tab widget only.
+/// GTK Box manages all vertical layout positions automatically.
+/// Active tab widget gets expand=true to fill 100% of remaining space with ZERO offset gap.
 fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
     #[cfg(target_os = "linux")]
     {
@@ -228,12 +229,13 @@ fn create_tab(
     )
     .devtools(true);
 
+    // In GTK Box layout, LogicalPosition must be (0,0) because GtkBox handles position automatically
     let _ = main_window.add_child(
         builder,
-        LogicalPosition::new(0.0, TOOLBAR_HEIGHT),
+        LogicalPosition::new(0.0, 0.0),
         LogicalSize::new(
             size.width,
-            (size.height - TOOLBAR_HEIGHT).max(0.0),
+            size.height,
         ),
     ).map_err(|e| e.to_string())?;
 
