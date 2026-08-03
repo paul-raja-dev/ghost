@@ -81,7 +81,9 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
-fn fix_gtk_layout(main_window: &tauri::Window) {
+/// Precise GTK Child Widget Packing:
+/// Hides all inactive GTK tab widgets so GTK Box gives 100% of remaining vertical height to the active tab widget only.
+fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
     #[cfg(target_os = "linux")]
     {
         if let Ok(gtk_box) = main_window.default_vbox() {
@@ -90,10 +92,19 @@ fn fix_gtk_layout(main_window: &tauri::Window) {
                 toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
                 gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
             }
-            for widget in children.iter().skip(1) {
-                if widget.is_visible() {
+
+            let active_index = state.active_id.as_ref().and_then(|active_id| {
+                state.tabs.iter().position(|t| &t.id == active_id)
+            });
+
+            // Loop over tab webview widgets (index 1..N)
+            for (idx, widget) in children.iter().skip(1).enumerate() {
+                let is_active = Some(idx) == active_index;
+                if is_active {
+                    widget.show();
                     gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
                 } else {
+                    widget.hide();
                     gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
                 }
             }
@@ -104,7 +115,7 @@ fn fix_gtk_layout(main_window: &tauri::Window) {
 /// Adaptive Toolbar Visibility:
 /// - If active tab is newtab.html -> hide toolbar.
 /// - If active tab is external page (Google, etc.) -> show toolbar automatically!
-fn apply_adaptive_toolbar(main_window: &tauri::Window, active_tab_url: Option<&str>) {
+fn apply_adaptive_toolbar(main_window: &tauri::Window, state: &AppState, active_tab_url: Option<&str>) {
     #[cfg(target_os = "linux")]
     {
         let is_newtab = match active_tab_url {
@@ -120,15 +131,19 @@ fn apply_adaptive_toolbar(main_window: &tauri::Window, active_tab_url: Option<&s
                 } else {
                     toolbar_widget.show();
                 }
-                fix_gtk_layout(main_window);
+                fix_gtk_layout(main_window, state);
             }
         }
     }
 }
 
 #[tauri::command]
-fn toggle_toolbar(app_handle: tauri::AppHandle) -> Result<bool, String> {
+fn toggle_toolbar(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<bool, String> {
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
+    let state_guard = state.lock().unwrap();
     
     #[cfg(target_os = "linux")]
     {
@@ -138,12 +153,12 @@ fn toggle_toolbar(app_handle: tauri::AppHandle) -> Result<bool, String> {
                 if toolbar_widget.is_visible() {
                     toolbar_widget.hide();
                     let _ = app_handle.emit_to("main", "toolbar-hidden", ());
-                    fix_gtk_layout(&main_window);
+                    fix_gtk_layout(&main_window, &state_guard);
                     return Ok(false);
                 } else {
                     toolbar_widget.show();
                     let _ = app_handle.emit_to("main", "toolbar-shown", ());
-                    fix_gtk_layout(&main_window);
+                    fix_gtk_layout(&main_window, &state_guard);
                     return Ok(true);
                 }
             }
@@ -154,8 +169,12 @@ fn toggle_toolbar(app_handle: tauri::AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn hide_toolbar(app_handle: tauri::AppHandle) -> Result<(), String> {
+fn hide_toolbar(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<(), String> {
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
+    let state_guard = state.lock().unwrap();
     
     #[cfg(target_os = "linux")]
     {
@@ -163,7 +182,7 @@ fn hide_toolbar(app_handle: tauri::AppHandle) -> Result<(), String> {
             let children = gtk_box.children();
             if let Some(toolbar_widget) = children.get(0) {
                 toolbar_widget.hide();
-                fix_gtk_layout(&main_window);
+                fix_gtk_layout(&main_window, &state_guard);
             }
         }
     }
@@ -239,9 +258,9 @@ fn create_tab(
         state_guard.active_id = Some(new_tab_id.clone());
 
         emit_tab_state(&app_handle, &state_guard)?;
-    }
 
-    apply_adaptive_toolbar(&main_window, Some(&target_url));
+        apply_adaptive_toolbar(&main_window, &state_guard, Some(&target_url));
+    }
 
     Ok(new_tab_id)
 }
@@ -254,32 +273,29 @@ fn switch_tab(
 ) -> Result<(), String> {
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
 
-    let target_url = {
-        let mut state_guard = state.lock().unwrap();
-        if state_guard.active_id.as_deref() == Some(&tab_id) {
-            return Ok(());
+    let mut state_guard = state.lock().unwrap();
+    if state_guard.active_id.as_deref() == Some(&tab_id) {
+        return Ok(());
+    }
+
+    if let Some(old_id) = &state_guard.active_id {
+        if let Some(old_webview) = app_handle.get_webview(old_id) {
+            let _ = old_webview.hide();
         }
+    }
 
-        if let Some(old_id) = &state_guard.active_id {
-            if let Some(old_webview) = app_handle.get_webview(old_id) {
-                let _ = old_webview.hide();
-            }
-        }
+    if let Some(new_webview) = app_handle.get_webview(&tab_id) {
+        let _ = new_webview.show();
+        let _ = new_webview.set_focus();
+    } else {
+        return Err(format!("Tab webview {} not found", tab_id));
+    }
 
-        if let Some(new_webview) = app_handle.get_webview(&tab_id) {
-            let _ = new_webview.show();
-            let _ = new_webview.set_focus();
-        } else {
-            return Err(format!("Tab webview {} not found", tab_id));
-        }
+    state_guard.active_id = Some(tab_id.clone());
+    emit_tab_state(&app_handle, &state_guard)?;
 
-        state_guard.active_id = Some(tab_id.clone());
-        emit_tab_state(&app_handle, &state_guard)?;
-
-        state_guard.tabs.iter().find(|t| t.id == tab_id).map(|t| t.url.clone())
-    };
-
-    apply_adaptive_toolbar(&main_window, target_url.as_deref());
+    let target_url = state_guard.tabs.iter().find(|t| t.id == tab_id).map(|t| t.url.clone());
+    apply_adaptive_toolbar(&main_window, &state_guard, target_url.as_deref());
 
     Ok(())
 }
@@ -332,7 +348,7 @@ fn close_tab(
 
     emit_tab_state(&app_handle, &state_guard)?;
 
-    apply_adaptive_toolbar(&main_window, active_url.as_deref());
+    apply_adaptive_toolbar(&main_window, &state_guard, active_url.as_deref());
 
     Ok(())
 }
@@ -362,7 +378,7 @@ fn navigate(
             emit_tab_state(&app_handle, &state_guard)?;
 
             if let Some(main_window) = app_handle.get_window("main") {
-                apply_adaptive_toolbar(&main_window, Some(&full_url));
+                apply_adaptive_toolbar(&main_window, &state_guard, Some(&full_url));
             }
             return Ok(());
         }
@@ -486,7 +502,9 @@ fn main() {
             #[cfg(target_os = "linux")]
             {
                 if let Some(main_window) = app.get_window("main") {
-                    apply_adaptive_toolbar(&main_window, Some("newtab.html"));
+                    let state_guard = app.state::<Arc<Mutex<AppState>>>();
+                    let state_locked = state_guard.lock().unwrap();
+                    apply_adaptive_toolbar(&main_window, &state_locked, Some("newtab.html"));
 
                     // Capture Ctrl+B at GTK window level
                     if let Ok(gtk_window) = main_window.gtk_window() {
@@ -502,6 +520,8 @@ fn main() {
                                     if let Ok(vbox) = mw.default_vbox() {
                                         let ch = vbox.children();
                                         if let Some(tw) = ch.get(0) {
+                                            let app_st = handle_clone.state::<Arc<Mutex<AppState>>>();
+                                            let st = app_st.lock().unwrap();
                                             if tw.is_visible() {
                                                 tw.hide();
                                                 let _ = handle_clone.emit_to("main", "toolbar-hidden", ());
@@ -509,7 +529,7 @@ fn main() {
                                                 tw.show();
                                                 let _ = handle_clone.emit_to("main", "toolbar-shown", ());
                                             }
-                                            fix_gtk_layout(&mw);
+                                            fix_gtk_layout(&mw, &st);
                                         }
                                     }
                                 }
