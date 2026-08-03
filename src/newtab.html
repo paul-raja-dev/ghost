@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ghost</title>
+  <title>Ghost Shell</title>
   <style>
     * {
       box-sizing: border-box;
@@ -31,16 +31,11 @@
       width: 90%;
       max-width: 620px;
       background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(57, 255, 20, 0.18);
+      border: 1px solid rgba(57, 255, 20, 0.22);
       border-radius: 8px;
       padding: 14px 20px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(57, 255, 20, 0.06);
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .terminal-prompt:focus-within {
-      border-color: rgba(57, 255, 20, 0.45);
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(57, 255, 20, 0.12);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(57, 255, 20, 0.08);
+      cursor: text;
     }
 
     .prompt-symbol {
@@ -59,22 +54,37 @@
       outline: none;
       caret-color: #39ff14;
       min-width: 0;
+      user-select: text;
+      -webkit-user-select: text;
     }
 
     #cli-input::placeholder {
-      color: #2a3a32;
+      color: #2a4034;
     }
   </style>
 </head>
 <body>
-  <div class="terminal-prompt">
+  <div class="terminal-prompt" id="prompt-box">
     <span class="prompt-symbol">ghost >></span>
-    <input id="cli-input" type="text" autofocus placeholder="type URL or search..." />
+    <input id="cli-input" type="text" autofocus autocomplete="off" spellcheck="false" placeholder="type URL or search..." />
   </div>
 
   <script>
     const { invoke } = window.__TAURI__.core;
     const cliInput = document.getElementById('cli-input');
+    const promptBox = document.getElementById('prompt-box');
+
+    function focusInput() {
+      cliInput.focus();
+    }
+
+    // Ensure focus immediately
+    window.addEventListener('DOMContentLoaded', focusInput);
+    window.addEventListener('load', focusInput);
+    setTimeout(focusInput, 50);
+
+    promptBox.addEventListener('click', focusInput);
+    document.body.addEventListener('click', focusInput);
 
     cliInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -84,9 +94,6 @@
         }
       }
     });
-
-    // Re-focus input if user clicks anywhere on background
-    document.body.addEventListener('click', () => cliInput.focus());
   </script>
 </body>
 </html>
