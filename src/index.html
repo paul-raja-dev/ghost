@@ -3,81 +3,212 @@
 <head>
   <meta charset="UTF-8" />
   <style>
+    * {
+      box-sizing: border-box;
+    }
     html, body {
       margin: 0;
+      padding: 0;
       height: 46px;
       overflow: hidden;
-      font-family: -apple-system, 'Segoe UI', sans-serif;
-      background: #1a1a2e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #12121e;
+      color: #e0e0f0;
+      user-select: none;
     }
     #toolbar {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       height: 46px;
-      padding: 0 8px;
-      box-sizing: border-box;
-      gap: 4px;
+      background: #12121e;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .nav-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
+    #tabbar {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 4px;
+      gap: 2px;
+      background: #0a0a12;
+      overflow-x: auto;
+    }
+    #tabbar::-webkit-scrollbar {
+      display: none;
+    }
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 20px;
+      padding: 0 8px;
+      border-radius: 4px 4px 0 0;
+      background: rgba(255, 255, 255, 0.04);
+      color: #8888aa;
+      font-size: 11px;
+      cursor: pointer;
+      max-width: 140px;
+      min-width: 80px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ccccee;
+    }
+    .tab.active {
+      background: #1a1a2e;
+      color: #ffffff;
+      font-weight: 500;
+      box-shadow: 0 -1px 3px rgba(0,0,0,0.3);
+    }
+    .tab-title {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tab-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      font-size: 10px;
+      color: #8888aa;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab-close:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+    }
+    #new-tab-btn {
+      width: 20px;
+      height: 20px;
       border: none;
       background: transparent;
       color: #8888aa;
-      font-size: 16px;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    #new-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    #navbar {
+      display: flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 6px;
+      gap: 4px;
+    }
+    .nav-btn {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: #8888aa;
+      font-size: 12px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.15s, color 0.15s;
       flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
     }
     .nav-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: #ccccee;
-    }
-    .nav-btn:active {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
     }
     #urlbar {
       flex: 1;
-      height: 32px;
-      padding: 0 12px;
-      border-radius: 8px;
+      height: 18px;
+      padding: 0 8px;
+      border-radius: 4px;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.05);
       color: #e0e0f0;
-      font-size: 13px;
+      font-size: 11px;
       outline: none;
       transition: border-color 0.2s, background 0.2s;
       min-width: 0;
     }
     #urlbar:focus {
-      border-color: rgba(120, 120, 255, 0.4);
+      border-color: rgba(120, 120, 255, 0.5);
       background: rgba(255, 255, 255, 0.1);
     }
     #urlbar::placeholder {
       color: #555577;
     }
     #urlbar.loading {
-      border-color: rgba(80, 200, 255, 0.5);
+      border-color: rgba(80, 200, 255, 0.6);
     }
   </style>
 </head>
 <body>
   <div id="toolbar">
-    <button class="nav-btn" id="back" title="Back">←</button>
-    <button class="nav-btn" id="forward" title="Forward">→</button>
-    <button class="nav-btn" id="refresh" title="Reload">↻</button>
-    <input id="urlbar" type="text" placeholder="Search or enter URL..." />
+    <div id="tabbar">
+      <!-- Tabs injected dynamically -->
+      <button id="new-tab-btn" title="New Tab (Ctrl+T)">+</button>
+    </div>
+    <div id="navbar">
+      <button class="nav-btn" id="back" title="Back">←</button>
+      <button class="nav-btn" id="forward" title="Forward">→</button>
+      <button class="nav-btn" id="refresh" title="Reload">↻</button>
+      <input id="urlbar" type="text" placeholder="Search or enter URL..." />
+    </div>
   </div>
 
   <script>
     const { invoke } = window.__TAURI__.core;
     const { listen } = window.__TAURI__.event;
 
+    const tabbar = document.getElementById('tabbar');
+    const newTabBtn = document.getElementById('new-tab-btn');
     const urlbar = document.getElementById('urlbar');
+
+    let currentTabs = [];
+    let currentActiveId = null;
+
+    // --- Render Tab Bar ---
+    function renderTabs() {
+      // Remove existing tab elements (keep new-tab-btn at the end)
+      const existingTabs = tabbar.querySelectorAll('.tab');
+      existingTabs.forEach(t => t.remove());
+
+      currentTabs.forEach(tab => {
+        const tabEl = document.createElement('div');
+        tabEl.className = `tab ${tab.id === currentActiveId ? 'active' : ''}`;
+        
+        const titleEl = document.createElement('span');
+        titleEl.className = 'tab-title';
+        titleEl.textContent = tab.title || tab.url || 'New Tab';
+
+        const closeEl = document.createElement('span');
+        closeEl.className = 'tab-close';
+        closeEl.textContent = '×';
+        closeEl.title = 'Close Tab';
+
+        closeEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          invoke('close_tab', { tabId: tab.id }).catch(console.error);
+        });
+
+        tabEl.addEventListener('click', () => {
+          if (tab.id !== currentActiveId) {
+            invoke('switch_tab', { tabId: tab.id }).catch(console.error);
+          }
+        });
+
+        tabbar.insertBefore(tabEl, newTabBtn);
+      });
+    }
 
     // --- Navigation ---
     function handleNavigate() {
@@ -95,10 +226,8 @@
       if (e.key === 'Enter') handleNavigate();
     });
 
-    // Select all text on focus for easy re-typing
     urlbar.addEventListener('focus', () => urlbar.select());
 
-    // --- Back / Forward / Reload ---
     document.getElementById('back').addEventListener('click', () => {
       invoke('go_back').catch(() => {});
     });
@@ -111,10 +240,42 @@
       invoke('reload').catch(() => {});
     });
 
-    // --- URL bar sync: listen for Rust events ---
+    newTabBtn.addEventListener('click', () => {
+      invoke('create_tab', { url: 'https://duckduckgo.com' }).catch(console.error);
+    });
+
+    // --- Event Listeners from Rust ---
+    listen('tabs-changed', (event) => {
+      currentTabs = event.payload.tabs || [];
+      currentActiveId = event.payload.active_id || null;
+      renderTabs();
+    });
+
     listen('url-changed', (event) => {
       urlbar.value = event.payload;
       urlbar.classList.remove('loading');
+    });
+
+    // --- Keyboard Shortcuts ---
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        invoke('create_tab', { url: 'https://duckduckgo.com' }).catch(console.error);
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        if (currentActiveId) {
+          invoke('close_tab', { tabId: currentActiveId }).catch(console.error);
+        }
+      } else if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        if (currentTabs.length > 1) {
+          const idx = currentTabs.findIndex(t => t.id === currentActiveId);
+          const nextIdx = e.shiftKey
+            ? (idx - 1 + currentTabs.length) % currentTabs.length
+            : (idx + 1) % currentTabs.length;
+          invoke('switch_tab', { tabId: currentTabs[nextIdx].id }).catch(console.error);
+        }
+      }
     });
   </script>
 </body>
