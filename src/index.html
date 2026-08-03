@@ -7,54 +7,114 @@
       margin: 0;
       height: 46px;
       overflow: hidden;
-      font-family: sans-serif;
-      background: #1e1e1e;
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
     }
     #toolbar {
       display: flex;
+      align-items: center;
       height: 46px;
-      padding: 6px;
+      padding: 0 8px;
       box-sizing: border-box;
-      gap: 6px;
+      gap: 4px;
+    }
+    .nav-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: #8888aa;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ccccee;
+    }
+    .nav-btn:active {
+      background: rgba(255, 255, 255, 0.12);
     }
     #urlbar {
       flex: 1;
-      padding: 6px 12px;
-      border-radius: 4px;
-      border: 1px solid #333;
-      background: #2d2d2d;
-      color: #fff;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.06);
+      color: #e0e0f0;
+      font-size: 13px;
       outline: none;
+      transition: border-color 0.2s, background 0.2s;
+      min-width: 0;
     }
-    #go {
-      padding: 6px 16px;
-      border-radius: 4px;
-      border: none;
-      background: #007acc;
-      color: #fff;
-      cursor: pointer;
+    #urlbar:focus {
+      border-color: rgba(120, 120, 255, 0.4);
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #urlbar::placeholder {
+      color: #555577;
+    }
+    #urlbar.loading {
+      border-color: rgba(80, 200, 255, 0.5);
     }
   </style>
 </head>
 <body>
   <div id="toolbar">
-    <input id="urlbar" type="text" placeholder="Enter URL or search..." />
-    <button id="go">Go</button>
+    <button class="nav-btn" id="back" title="Back">←</button>
+    <button class="nav-btn" id="forward" title="Forward">→</button>
+    <button class="nav-btn" id="refresh" title="Reload">↻</button>
+    <input id="urlbar" type="text" placeholder="Search or enter URL..." />
   </div>
 
   <script>
     const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
 
+    const urlbar = document.getElementById('urlbar');
+
+    // --- Navigation ---
     function handleNavigate() {
-      const url = document.getElementById('urlbar').value;
-      if (url.trim()) {
-        invoke('navigate', { url });
-      }
+      const input = urlbar.value.trim();
+      if (!input) return;
+
+      urlbar.classList.add('loading');
+      invoke('navigate', { url: input }).catch((err) => {
+        console.error('Navigate error:', err);
+        urlbar.classList.remove('loading');
+      });
     }
 
-    document.getElementById('go').addEventListener('click', handleNavigate);
-    document.getElementById('urlbar').addEventListener('keydown', (e) => {
+    urlbar.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleNavigate();
+    });
+
+    // Select all text on focus for easy re-typing
+    urlbar.addEventListener('focus', () => urlbar.select());
+
+    // --- Back / Forward / Reload ---
+    document.getElementById('back').addEventListener('click', () => {
+      invoke('go_back').catch(() => {});
+    });
+
+    document.getElementById('forward').addEventListener('click', () => {
+      invoke('go_forward').catch(() => {});
+    });
+
+    document.getElementById('refresh').addEventListener('click', () => {
+      invoke('reload').catch(() => {});
+    });
+
+    // --- URL bar sync: listen for Rust events ---
+    listen('url-changed', (event) => {
+      urlbar.value = event.payload;
+      urlbar.classList.remove('loading');
     });
   </script>
 </body>
