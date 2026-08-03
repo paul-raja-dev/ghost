@@ -1,7 +1,10 @@
 #![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 
-use tauri::{Emitter, Manager, WebviewUrl, WebviewBuilder, LogicalPosition, LogicalSize, WindowEvent};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewBuilder, LogicalPosition, LogicalSize};
 use url::Url;
+
+#[cfg(target_os = "linux")]
+use gtk::prelude::*;
 
 const TOOLBAR_HEIGHT: f64 = 46.0;
 
@@ -44,6 +47,23 @@ fn resolve_input(input: &str) -> Result<String, String> {
     Ok(format!("https://duckduckgo.com/?q={}", encoded))
 }
 
+/// Helper function to configure GTK packing on Linux so toolbar doesn't expand
+fn fix_gtk_layout(main_window: &tauri::Window) {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(gtk_box) = main_window.default_vbox() {
+            let children = gtk_box.children();
+            if let Some(toolbar_widget) = children.get(0) {
+                toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
+                gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
+            }
+            if let Some(content_widget) = children.get(1) {
+                gtk_box.set_child_packing(content_widget, true, true, 0, gtk::PackType::Start);
+            }
+        }
+    }
+}
+
 /// Navigate the content webview to a URL.
 /// Creates the content webview on first call, reuses it on subsequent calls.
 #[tauri::command]
@@ -63,12 +83,6 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
         let scale_factor = main_window.scale_factor().map_err(|e| e.to_string())?;
         let size = physical_size.to_logical::<f64>(scale_factor);
 
-        // Explicitly fix toolbar size (height: 46px) and position (0, 0)
-        if let Some(toolbar) = app_handle.get_webview("main") {
-            let _ = toolbar.set_position(LogicalPosition::new(0.0, 0.0));
-            let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
-        }
-
         let builder = WebviewBuilder::new(
             "content",
             WebviewUrl::External(url_parsed),
@@ -84,6 +98,9 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
                 ),
             )
             .map_err(|e| e.to_string())?;
+
+        // Adjust GTK box child packing so toolbar stays fixed at 46px and content fills the rest
+        fix_gtk_layout(&main_window);
     } else {
         return Err("Main window not found".to_string());
     }
@@ -129,27 +146,11 @@ fn reload(app_handle: tauri::AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![navigate, go_back, go_forward, reload])
-        .on_window_event(|window, event| {
-            if let WindowEvent::Resized(physical_size) = event {
-                let app_handle = window.app_handle();
-                let scale_factor = window.scale_factor().unwrap_or(1.0);
-                let size = physical_size.to_logical::<f64>(scale_factor);
-
-                // Keep toolbar fixed to top (0,0) with height 46px across full width
-                if let Some(toolbar) = app_handle.get_webview("main") {
-                    let _ = toolbar.set_position(LogicalPosition::new(0.0, 0.0));
-                    let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
-                }
-
-                // Keep content webview starting right below toolbar at (0, 46px) filling remaining height
-                if let Some(content) = app_handle.get_webview("content") {
-                    let _ = content.set_position(LogicalPosition::new(0.0, TOOLBAR_HEIGHT));
-                    let _ = content.set_size(LogicalSize::new(
-                        size.width,
-                        (size.height - TOOLBAR_HEIGHT).max(0.0),
-                    ));
-                }
+        .setup(|app| {
+            if let Some(main_window) = app.get_window("main") {
+                fix_gtk_layout(&main_window);
             }
+            Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
