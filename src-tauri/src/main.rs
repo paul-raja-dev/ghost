@@ -81,6 +81,41 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
+fn fix_gtk_layout(main_window: &tauri::Window) {
+    #[cfg(target_os = "linux")]
+    {
+        if let (Ok(gtk_window), Ok(gtk_box)) = (main_window.gtk_window(), main_window.default_vbox()) {
+            let children = gtk_box.children();
+            if children.len() >= 2 {
+                let toolbar_widget = &children[0];
+                let content_widget = &children[1];
+
+                // Check if already placed in an overlay
+                if gtk_box.parent().is_none() || children.len() > 2 {
+                    return;
+                }
+
+                gtk_box.remove(toolbar_widget);
+                gtk_box.remove(content_widget);
+
+                let overlay = gtk::Overlay::new();
+                overlay.add(content_widget);
+                overlay.add_overlay(toolbar_widget);
+
+                toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
+                toolbar_widget.set_valign(gtk::Align::Start);
+                toolbar_widget.set_halign(gtk::Align::Fill);
+
+                content_widget.set_valign(gtk::Align::Fill);
+                content_widget.set_halign(gtk::Align::Fill);
+
+                gtk_box.pack_start(&overlay, true, true, 0);
+                gtk_window.show_all();
+            }
+        }
+    }
+}
+
 #[tauri::command]
 fn create_tab(
     app_handle: tauri::AppHandle,
@@ -121,10 +156,10 @@ fn create_tab(
 
     let _ = main_window.add_child(
         builder,
-        LogicalPosition::new(0.0, TOOLBAR_HEIGHT),
+        LogicalPosition::new(0.0, 0.0),
         LogicalSize::new(
             size.width,
-            (size.height - TOOLBAR_HEIGHT).max(0.0),
+            size.height,
         ),
     ).map_err(|e| e.to_string())?;
 
@@ -355,22 +390,6 @@ fn reload(
     webview.eval("location.reload()").map_err(|e| e.to_string())
 }
 
-fn fix_gtk_layout(main_window: &tauri::Window) {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(gtk_box) = main_window.default_vbox() {
-            let children = gtk_box.children();
-            if let Some(toolbar_widget) = children.get(0) {
-                toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
-                gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
-            }
-            for widget in children.iter().skip(1) {
-                gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
-            }
-        }
-    }
-}
-
 fn main() {
     let app_state = Arc::new(Mutex::new(AppState::default()));
 
@@ -392,7 +411,6 @@ fn main() {
                 fix_gtk_layout(&main_window);
             }
 
-            // Spawns initial Roman Colosseum landing page (newtab.html)
             let handle = app.handle().clone();
             let state = app.state::<Arc<Mutex<AppState>>>();
             let _ = create_tab(handle, state, None);
