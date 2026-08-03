@@ -107,7 +107,8 @@ fn create_tab(
     let builder = WebviewBuilder::new(
         &new_tab_id,
         WebviewUrl::External(url_parsed),
-    );
+    )
+    .devtools(true);
 
     let _ = main_window.add_child(
         builder,
@@ -259,6 +260,42 @@ fn navigate(
 }
 
 #[tauri::command]
+fn update_tab_title(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<Mutex<AppState>>>,
+    tab_id: String,
+    title: String,
+) -> Result<(), String> {
+    let mut state_guard = state.lock().unwrap();
+    if let Some(tab) = state_guard.tabs.iter_mut().find(|t| t.id == tab_id) {
+        tab.title = title;
+    }
+    emit_tab_state(&app_handle, &state_guard)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_devtools(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<(), String> {
+    let active_id = {
+        let state_guard = state.lock().unwrap();
+        state_guard.active_id.clone().ok_or("No active tab")?
+    };
+
+    if let Some(webview) = app_handle.get_webview(&active_id) {
+        if webview.is_devtools_open() {
+            webview.close_devtools();
+        } else {
+            webview.open_devtools();
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn go_back(
     app_handle: tauri::AppHandle,
     state: State<'_, Arc<Mutex<AppState>>>,
@@ -337,7 +374,9 @@ fn main() {
             reload,
             create_tab,
             switch_tab,
-            close_tab
+            close_tab,
+            update_tab_title,
+            toggle_devtools
         ])
         .setup(move |app| {
             if let Some(main_window) = app.get_window("main") {
