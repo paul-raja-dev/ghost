@@ -22,41 +22,71 @@
     }
 
     .terminal-prompt {
-      font-size: 1.2rem;
+      font-size: 1.3rem;
       font-weight: 500;
       letter-spacing: 0.05em;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
+      width: 90%;
+      max-width: 620px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(57, 255, 20, 0.18);
+      border-radius: 8px;
+      padding: 14px 20px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(57, 255, 20, 0.06);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .terminal-prompt:focus-within {
+      border-color: rgba(57, 255, 20, 0.45);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(57, 255, 20, 0.12);
     }
 
     .prompt-symbol {
       color: #7878a0;
+      flex-shrink: 0;
+      font-weight: 600;
     }
 
-    .command {
+    #cli-input {
+      flex: 1;
+      background: transparent;
+      border: none;
       color: #39ff14;
+      font-family: inherit;
+      font-size: 1.3rem;
+      outline: none;
+      caret-color: #39ff14;
+      min-width: 0;
     }
 
-    .cursor {
-      display: inline-block;
-      width: 8px;
-      height: 1.1em;
-      background: #39ff14;
-      margin-left: 2px;
-      animation: blink 1s step-end infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
+    #cli-input::placeholder {
+      color: #2a3a32;
     }
   </style>
 </head>
 <body>
   <div class="terminal-prompt">
-    <span class="prompt-symbol">ghost ~ %</span>
-    <span class="command">ghost</span><span class="cursor"></span>
+    <span class="prompt-symbol">ghost >></span>
+    <input id="cli-input" type="text" autofocus placeholder="type URL or search..." />
   </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const cliInput = document.getElementById('cli-input');
+
+    cliInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const query = cliInput.value.trim();
+        if (query) {
+          invoke('navigate', { url: query }).catch(console.error);
+        }
+      }
+    });
+
+    // Re-focus input if user clicks anywhere on background
+    document.body.addEventListener('click', () => cliInput.focus());
+  </script>
 </body>
 </html>
