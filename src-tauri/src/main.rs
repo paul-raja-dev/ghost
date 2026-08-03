@@ -81,7 +81,6 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
-/// Repack GTK children: toolbar gets fixed height (if visible), active content expands to fill 100%.
 fn fix_gtk_layout(main_window: &tauri::Window) {
     #[cfg(target_os = "linux")]
     {
@@ -91,13 +90,37 @@ fn fix_gtk_layout(main_window: &tauri::Window) {
                 toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
                 gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
             }
-            // Packing for tab webview children
             for widget in children.iter().skip(1) {
                 if widget.is_visible() {
                     gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
                 } else {
                     gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
                 }
+            }
+        }
+    }
+}
+
+/// Adaptive Toolbar Visibility:
+/// - If active tab is newtab.html -> hide toolbar.
+/// - If active tab is external page (Google, etc.) -> show toolbar automatically!
+fn apply_adaptive_toolbar(main_window: &tauri::Window, active_tab_url: Option<&str>) {
+    #[cfg(target_os = "linux")]
+    {
+        let is_newtab = match active_tab_url {
+            Some(u) => u == "newtab.html" || u.contains("newtab.html"),
+            None => true,
+        };
+
+        if let Ok(gtk_box) = main_window.default_vbox() {
+            let children = gtk_box.children();
+            if let Some(toolbar_widget) = children.get(0) {
+                if is_newtab {
+                    toolbar_widget.hide();
+                } else {
+                    toolbar_widget.show();
+                }
+                fix_gtk_layout(main_window);
             }
         }
     }
@@ -211,14 +234,14 @@ fn create_tab(
         state_guard.tabs.push(TabInfo {
             id: new_tab_id.clone(),
             title: if target_url == "newtab.html" { "New Tab".to_string() } else { format!("Tab {}", new_tab_num) },
-            url: target_url,
+            url: target_url.clone(),
         });
         state_guard.active_id = Some(new_tab_id.clone());
 
         emit_tab_state(&app_handle, &state_guard)?;
     }
 
-    fix_gtk_layout(&main_window);
+    apply_adaptive_toolbar(&main_window, Some(&target_url));
 
     Ok(new_tab_id)
 }
@@ -231,28 +254,32 @@ fn switch_tab(
 ) -> Result<(), String> {
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
 
-    let mut state_guard = state.lock().unwrap();
-    if state_guard.active_id.as_deref() == Some(&tab_id) {
-        return Ok(());
-    }
-
-    if let Some(old_id) = &state_guard.active_id {
-        if let Some(old_webview) = app_handle.get_webview(old_id) {
-            let _ = old_webview.hide();
+    let target_url = {
+        let mut state_guard = state.lock().unwrap();
+        if state_guard.active_id.as_deref() == Some(&tab_id) {
+            return Ok(());
         }
-    }
 
-    if let Some(new_webview) = app_handle.get_webview(&tab_id) {
-        let _ = new_webview.show();
-        let _ = new_webview.set_focus();
-    } else {
-        return Err(format!("Tab webview {} not found", tab_id));
-    }
+        if let Some(old_id) = &state_guard.active_id {
+            if let Some(old_webview) = app_handle.get_webview(old_id) {
+                let _ = old_webview.hide();
+            }
+        }
 
-    state_guard.active_id = Some(tab_id);
-    emit_tab_state(&app_handle, &state_guard)?;
+        if let Some(new_webview) = app_handle.get_webview(&tab_id) {
+            let _ = new_webview.show();
+            let _ = new_webview.set_focus();
+        } else {
+            return Err(format!("Tab webview {} not found", tab_id));
+        }
 
-    fix_gtk_layout(&main_window);
+        state_guard.active_id = Some(tab_id.clone());
+        emit_tab_state(&app_handle, &state_guard)?;
+
+        state_guard.tabs.iter().find(|t| t.id == tab_id).map(|t| t.url.clone())
+    };
+
+    apply_adaptive_toolbar(&main_window, target_url.as_deref());
 
     Ok(())
 }
@@ -279,9 +306,10 @@ fn close_tab(
 
     state_guard.tabs.remove(pos);
 
-    if state_guard.active_id.as_deref() == Some(&tab_id) {
+    let active_url = if state_guard.active_id.as_deref() == Some(&tab_id) {
         if state_guard.tabs.is_empty() {
             state_guard.active_id = None;
+            None
         } else {
             let new_pos = if pos < state_guard.tabs.len() {
                 pos
@@ -293,13 +321,18 @@ fn close_tab(
                 let _ = new_webview.show();
                 let _ = new_webview.set_focus();
             }
-            state_guard.active_id = Some(new_active_id);
+            state_guard.active_id = Some(new_active_id.clone());
+            state_guard.tabs[new_pos].url.clone().into()
         }
-    }
+    } else {
+        state_guard.active_id.as_ref().and_then(|id| {
+            state_guard.tabs.iter().find(|t| &t.id == id).map(|t| t.url.clone())
+        })
+    };
 
     emit_tab_state(&app_handle, &state_guard)?;
 
-    fix_gtk_layout(&main_window);
+    apply_adaptive_toolbar(&main_window, active_url.as_deref());
 
     Ok(())
 }
@@ -327,6 +360,10 @@ fn navigate(
                 tab.url = full_url.clone();
             }
             emit_tab_state(&app_handle, &state_guard)?;
+
+            if let Some(main_window) = app_handle.get_window("main") {
+                apply_adaptive_toolbar(&main_window, Some(&full_url));
+            }
             return Ok(());
         }
     }
@@ -445,20 +482,11 @@ fn main() {
             let state = app.state::<Arc<Mutex<AppState>>>();
             let _ = create_tab(handle.clone(), state, None);
 
-            // Set up GTK: hide toolbar by default, capture Ctrl+B globally
+            // Set up GTK: hide toolbar on newtab by default, capture Ctrl+B globally
             #[cfg(target_os = "linux")]
             {
                 if let Some(main_window) = app.get_window("main") {
-                    fix_gtk_layout(&main_window);
-
-                    // Hide toolbar on startup
-                    if let Ok(gtk_box) = main_window.default_vbox() {
-                        let children = gtk_box.children();
-                        if let Some(toolbar_widget) = children.get(0) {
-                            toolbar_widget.hide();
-                            fix_gtk_layout(&main_window);
-                        }
-                    }
+                    apply_adaptive_toolbar(&main_window, Some("newtab.html"));
 
                     // Capture Ctrl+B at GTK window level
                     if let Ok(gtk_window) = main_window.gtk_window() {
@@ -468,7 +496,7 @@ fn main() {
                             let state = event.state();
                             let is_ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
                             
-                            // Ctrl+B = toggle toolbar
+                            // Ctrl+B = toggle toolbar manually
                             if is_ctrl && (keyval == gdk::keys::constants::b || keyval == gdk::keys::constants::B) {
                                 if let Some(mw) = handle_clone.get_window("main") {
                                     if let Ok(vbox) = mw.default_vbox() {
