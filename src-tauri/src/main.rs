@@ -63,10 +63,19 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
         let scale_factor = main_window.scale_factor().map_err(|e| e.to_string())?;
         let size = physical_size.to_logical::<f64>(scale_factor);
 
+        // Resize the toolbar webview to only 46px tall — by default it fills the
+        // entire window and its opaque background covers the content webview
+        if let Some(toolbar) = app_handle.get_webview("main") {
+            toolbar
+                .set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT))
+                .map_err(|e| e.to_string())?;
+        }
+
         let builder = WebviewBuilder::new(
             "content",
             WebviewUrl::External(url_parsed),
-        );
+        )
+        .auto_resize();
 
         main_window
             .add_child(
