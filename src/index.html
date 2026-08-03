@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 46px;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: #1e1e1e;
+    }
+    #toolbar {
+      display: flex;
+      height: 46px;
+      padding: 6px;
+      box-sizing: border-box;
+      gap: 6px;
+    }
+    #urlbar {
+      flex: 1;
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid #333;
+      background: #2d2d2d;
+      color: #fff;
+      outline: none;
+    }
+    #go {
+      padding: 6px 16px;
+      border-radius: 4px;
+      border: none;
+      background: #007acc;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <input id="urlbar" type="text" placeholder="Enter URL or search..." />
+    <button id="go">Go</button>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+
+    function handleNavigate() {
+      const url = document.getElementById('urlbar').value;
+      if (url.trim()) {
+        invoke('navigate', { url });
+      }
+    }
+
+    document.getElementById('go').addEventListener('click', handleNavigate);
+    document.getElementById('urlbar').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleNavigate();
+    });
+  </script>
+</body>
+</html>
