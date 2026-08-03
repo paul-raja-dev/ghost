@@ -8,7 +8,7 @@ use url::Url;
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
 
-const TOOLBAR_HEIGHT: f64 = 46.0;
+const TOOLBAR_HEIGHT: f64 = 72.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabInfo {
@@ -58,38 +58,7 @@ fn resolve_input(input: &str) -> Result<String, String> {
     }
 
     let encoded = trimmed.replace(' ', "+");
-    Ok(format!("https://duckduckgo.com/?q={}", encoded))
-}
-
-fn update_gtk_packing(main_window: &tauri::Window, active_tab_id: Option<&str>) {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(gtk_box) = main_window.default_vbox() {
-            let children = gtk_box.children();
-            if let Some(toolbar_widget) = children.get(0) {
-                toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
-                gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
-            }
-
-            // Configure packing for all tab content webviews
-            for (idx, widget) in children.iter().enumerate().skip(1) {
-                // If it matches active_tab_id, expand it, otherwise don't expand
-                let is_active = if let Some(active_id) = active_tab_id {
-                    let app_handle = main_window.app_handle();
-                    if let Some(active_webview) = app_handle.get_webview(active_id) {
-                        // Compare widget references if needed or enable packing
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-                
-                gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
-            }
-        }
-    }
+    Ok(format!("https://www.google.com/search?q={}", encoded))
 }
 
 fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(), String> {
@@ -118,7 +87,7 @@ fn create_tab(
     state: State<'_, Arc<Mutex<AppState>>>,
     url: Option<String>,
 ) -> Result<String, String> {
-    let target_url = resolve_input(url.as_deref().unwrap_or("https://duckduckgo.com"))?;
+    let target_url = resolve_input(url.as_deref().unwrap_or("https://www.google.com"))?;
     let url_parsed: Url = target_url.parse().map_err(|e: url::ParseError| e.to_string())?;
 
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
@@ -152,14 +121,12 @@ fn create_tab(
     {
         let mut state_guard = state.lock().unwrap();
 
-        // Hide previous active tab if any
         if let Some(old_active_id) = &state_guard.active_id {
             if let Some(old_webview) = app_handle.get_webview(old_active_id) {
                 let _ = old_webview.hide();
             }
         }
 
-        // Show new tab
         if let Some(new_webview) = app_handle.get_webview(&new_tab_id) {
             let _ = new_webview.show();
         }
@@ -229,14 +196,12 @@ fn close_tab(
         .position(|t| t.id == tab_id)
         .ok_or("Tab not found")?;
 
-    // Close the target webview
     if let Some(webview) = app_handle.get_webview(&tab_id) {
         let _ = webview.close();
     }
 
     state_guard.tabs.remove(pos);
 
-    // If we closed the active tab, select a neighboring tab
     if state_guard.active_id.as_deref() == Some(&tab_id) {
         if state_guard.tabs.is_empty() {
             state_guard.active_id = None;
@@ -289,7 +254,6 @@ fn navigate(
         }
     }
 
-    // If no active tab exists, create one!
     create_tab(app_handle, state, Some(url))?;
     Ok(())
 }
@@ -380,10 +344,10 @@ fn main() {
                 fix_gtk_layout(&main_window);
             }
 
-            // Create initial default tab
+            // Create initial default tab with Google
             let handle = app.handle().clone();
             let state = app.state::<Arc<Mutex<AppState>>>();
-            let _ = create_tab(handle, state, Some("https://duckduckgo.com".to_string()));
+            let _ = create_tab(handle, state, Some("https://www.google.com".to_string()));
 
             Ok(())
         })
