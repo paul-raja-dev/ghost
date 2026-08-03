@@ -81,39 +81,71 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
+/// Repack GTK children: toolbar gets fixed height (if visible), active content expands to fill 100%.
 fn fix_gtk_layout(main_window: &tauri::Window) {
     #[cfg(target_os = "linux")]
     {
-        if let (Ok(gtk_window), Ok(gtk_box)) = (main_window.gtk_window(), main_window.default_vbox()) {
+        if let Ok(gtk_box) = main_window.default_vbox() {
             let children = gtk_box.children();
-            if children.len() >= 2 {
-                let toolbar_widget = &children[0];
-                let content_widget = &children[1];
-
-                // Check if already placed in an overlay
-                if gtk_box.parent().is_none() || children.len() > 2 {
-                    return;
-                }
-
-                gtk_box.remove(toolbar_widget);
-                gtk_box.remove(content_widget);
-
-                let overlay = gtk::Overlay::new();
-                overlay.add(content_widget);
-                overlay.add_overlay(toolbar_widget);
-
+            if let Some(toolbar_widget) = children.get(0) {
                 toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
-                toolbar_widget.set_valign(gtk::Align::Start);
-                toolbar_widget.set_halign(gtk::Align::Fill);
-
-                content_widget.set_valign(gtk::Align::Fill);
-                content_widget.set_halign(gtk::Align::Fill);
-
-                gtk_box.pack_start(&overlay, true, true, 0);
-                gtk_window.show_all();
+                gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
+            }
+            // Packing for tab webview children
+            for widget in children.iter().skip(1) {
+                if widget.is_visible() {
+                    gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
+                } else {
+                    gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
+                }
             }
         }
     }
+}
+
+#[tauri::command]
+fn toggle_toolbar(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
+    
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(gtk_box) = main_window.default_vbox() {
+            let children = gtk_box.children();
+            if let Some(toolbar_widget) = children.get(0) {
+                if toolbar_widget.is_visible() {
+                    toolbar_widget.hide();
+                    let _ = app_handle.emit_to("main", "toolbar-hidden", ());
+                    fix_gtk_layout(&main_window);
+                    return Ok(false);
+                } else {
+                    toolbar_widget.show();
+                    let _ = app_handle.emit_to("main", "toolbar-shown", ());
+                    fix_gtk_layout(&main_window);
+                    return Ok(true);
+                }
+            }
+        }
+    }
+    
+    Ok(false)
+}
+
+#[tauri::command]
+fn hide_toolbar(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
+    
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(gtk_box) = main_window.default_vbox() {
+            let children = gtk_box.children();
+            if let Some(toolbar_widget) = children.get(0) {
+                toolbar_widget.hide();
+                fix_gtk_layout(&main_window);
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -156,10 +188,10 @@ fn create_tab(
 
     let _ = main_window.add_child(
         builder,
-        LogicalPosition::new(0.0, 0.0),
+        LogicalPosition::new(0.0, TOOLBAR_HEIGHT),
         LogicalSize::new(
             size.width,
-            size.height,
+            (size.height - TOOLBAR_HEIGHT).max(0.0),
         ),
     ).map_err(|e| e.to_string())?;
 
@@ -404,16 +436,63 @@ fn main() {
             switch_tab,
             close_tab,
             update_tab_title,
-            toggle_devtools
+            toggle_devtools,
+            toggle_toolbar,
+            hide_toolbar
         ])
         .setup(move |app| {
-            if let Some(main_window) = app.get_window("main") {
-                fix_gtk_layout(&main_window);
-            }
-
             let handle = app.handle().clone();
             let state = app.state::<Arc<Mutex<AppState>>>();
-            let _ = create_tab(handle, state, None);
+            let _ = create_tab(handle.clone(), state, None);
+
+            // Set up GTK: hide toolbar by default, capture Ctrl+B globally
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(main_window) = app.get_window("main") {
+                    fix_gtk_layout(&main_window);
+
+                    // Hide toolbar on startup
+                    if let Ok(gtk_box) = main_window.default_vbox() {
+                        let children = gtk_box.children();
+                        if let Some(toolbar_widget) = children.get(0) {
+                            toolbar_widget.hide();
+                            fix_gtk_layout(&main_window);
+                        }
+                    }
+
+                    // Capture Ctrl+B at GTK window level
+                    if let Ok(gtk_window) = main_window.gtk_window() {
+                        let handle_clone = handle.clone();
+                        gtk_window.connect_key_press_event(move |_win, event| {
+                            let keyval = event.keyval();
+                            let state = event.state();
+                            let is_ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
+                            
+                            // Ctrl+B = toggle toolbar
+                            if is_ctrl && (keyval == gdk::keys::constants::b || keyval == gdk::keys::constants::B) {
+                                if let Some(mw) = handle_clone.get_window("main") {
+                                    if let Ok(vbox) = mw.default_vbox() {
+                                        let ch = vbox.children();
+                                        if let Some(tw) = ch.get(0) {
+                                            if tw.is_visible() {
+                                                tw.hide();
+                                                let _ = handle_clone.emit_to("main", "toolbar-hidden", ());
+                                            } else {
+                                                tw.show();
+                                                let _ = handle_clone.emit_to("main", "toolbar-shown", ());
+                                            }
+                                            fix_gtk_layout(&mw);
+                                        }
+                                    }
+                                }
+                                return gtk::glib::Propagation::Stop;
+                            }
+                            
+                            gtk::glib::Propagation::Proceed
+                        });
+                    }
+                }
+            }
 
             Ok(())
         })
