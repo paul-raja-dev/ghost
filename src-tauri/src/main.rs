@@ -81,52 +81,36 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
-/// GtkOverlay Layout Architecture:
-/// Content webview fills 100% of the window (y=0 to bottom).
-/// Toolbar webview floats on top at top edge (y=0, height 76px).
+/// Robust GTK Layout Manager:
+/// 1. Toolbar widget (children[0]): fixed 76px height.
+/// 2. Active tab widget: shown with expand=true (fills 100% of remaining space).
+/// 3. Inactive tab widgets: hidden with expand=false.
 fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
     #[cfg(target_os = "linux")]
     {
-        if let (Ok(gtk_window), Ok(gtk_box)) = (main_window.gtk_window(), main_window.default_vbox()) {
+        if let Ok(gtk_box) = main_window.default_vbox() {
             let children = gtk_box.children();
-            if children.len() >= 2 {
-                let toolbar_widget = &children[0];
+            if children.is_empty() {
+                return;
+            }
 
-                let active_index = state.active_id.as_ref().and_then(|active_id| {
-                    state.tabs.iter().position(|t| &t.id == active_id)
-                });
+            if let Some(toolbar_widget) = children.get(0) {
+                toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
+                gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
+            }
 
-                // Show only active tab, hide inactive ones
-                for (idx, widget) in children.iter().skip(1).enumerate() {
-                    let is_active = Some(idx) == active_index;
-                    if is_active {
-                        widget.show();
-                    } else {
-                        widget.hide();
-                    }
-                }
+            let active_index = state.active_id.as_ref().and_then(|active_id| {
+                state.tabs.iter().position(|t| &t.id == active_id)
+            });
 
-                // Setup overlay if not yet created
-                if gtk_box.parent().is_some() && children.len() >= 2 {
-                    let active_widget = active_index.and_then(|idx| children.get(idx + 1));
-                    if let Some(content_widget) = active_widget {
-                        gtk_box.remove(toolbar_widget);
-                        gtk_box.remove(content_widget);
-
-                        let overlay = gtk::Overlay::new();
-                        overlay.add(content_widget);
-                        overlay.add_overlay(toolbar_widget);
-
-                        toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
-                        toolbar_widget.set_valign(gtk::Align::Start);
-                        toolbar_widget.set_halign(gtk::Align::Fill);
-
-                        content_widget.set_valign(gtk::Align::Fill);
-                        content_widget.set_halign(gtk::Align::Fill);
-
-                        gtk_box.pack_start(&overlay, true, true, 0);
-                        gtk_window.show_all();
-                    }
+            for (idx, widget) in children.iter().skip(1).enumerate() {
+                let is_active = Some(idx) == active_index;
+                if is_active {
+                    widget.show();
+                    gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
+                } else {
+                    widget.hide();
+                    gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
                 }
             }
         }
@@ -134,8 +118,8 @@ fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
 }
 
 /// Adaptive Toolbar Visibility:
-/// - If active tab is newtab.html -> hide toolbar.
-/// - If active tab is external page (Google, etc.) -> show toolbar automatically!
+/// - If active tab is newtab.html -> hide toolbar (GTK collapses toolbar height to 0px).
+/// - If active tab is external page (Google, etc.) -> show toolbar (GTK allocates 76px at top).
 fn apply_adaptive_toolbar(main_window: &tauri::Window, state: &AppState, active_tab_url: Option<&str>) {
     #[cfg(target_os = "linux")]
     {
