@@ -9,39 +9,39 @@
     html, body {
       margin: 0;
       padding: 0;
-      height: 72px;
+      height: 76px;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background: #141422;
+      background: #12121e;
       color: #e2e2f0;
       user-select: none;
     }
     #toolbar {
       display: flex;
       flex-direction: column;
-      height: 72px;
-      background: #141422;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      height: 76px;
+      background: #12121e;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    /* --- Row 1: Nav & Search Bar (38px) --- */
+    /* --- Row 1: Nav & Search Bar (42px) --- */
     #navbar {
       display: flex;
       align-items: center;
-      height: 38px;
+      height: 42px;
       padding: 0 10px;
       gap: 8px;
-      background: #10101b;
+      background: #0e0e18;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
     .nav-btn {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
       border: none;
       background: transparent;
-      color: #9090b0;
-      font-size: 14px;
+      color: #9595b8;
+      font-size: 15px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -54,31 +54,49 @@
       color: #ffffff;
     }
     .nav-btn:active {
-      background: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.15);
     }
-    #urlbar {
+
+    /* Search/URL Container */
+    #urlbar-container {
       flex: 1;
-      height: 28px;
-      padding: 0 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: #1a1a2b;
-      color: #f0f0ff;
-      font-size: 12px;
-      outline: none;
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      background: #181828;
       transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
       min-width: 0;
     }
-    #urlbar:focus {
-      border-color: rgba(130, 130, 255, 0.5);
-      background: #202036;
-      box-shadow: 0 0 0 2px rgba(130, 130, 255, 0.15);
+    #urlbar-container:focus-within {
+      border-color: rgba(140, 140, 255, 0.55);
+      background: #1f1f34;
+      box-shadow: 0 0 0 2px rgba(140, 140, 255, 0.15);
+    }
+    #urlbar-icon {
+      font-size: 12px;
+      color: #757598;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    #urlbar {
+      flex: 1;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: #f0f0ff;
+      font-size: 13px;
+      font-weight: 400;
+      outline: none;
+      min-width: 0;
     }
     #urlbar::placeholder {
-      color: #606080;
+      color: #606085;
     }
-    #urlbar.loading {
-      border-color: rgba(80, 200, 255, 0.6);
+    #urlbar-container.loading {
+      border-color: rgba(80, 200, 255, 0.65);
     }
 
     /* --- Row 2: Tab Strip (34px) Below Search Bar --- */
@@ -88,7 +106,7 @@
       height: 34px;
       padding: 0 8px;
       gap: 4px;
-      background: #141422;
+      background: #12121e;
       overflow-x: auto;
     }
     #tabbar::-webkit-scrollbar {
@@ -98,12 +116,12 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      height: 28px;
+      height: 26px;
       padding: 0 10px;
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.04);
-      color: #9090b0;
+      color: #8888aa;
       font-size: 12px;
       cursor: pointer;
       max-width: 180px;
@@ -115,11 +133,11 @@
       color: #d0d0e8;
     }
     .tab.active {
-      background: #222236;
-      border-color: rgba(130, 130, 255, 0.25);
+      background: #202034;
+      border-color: rgba(140, 140, 255, 0.25);
       color: #ffffff;
       font-weight: 500;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
     }
     .tab-title {
       flex: 1;
@@ -135,7 +153,7 @@
       height: 16px;
       border-radius: 50%;
       font-size: 11px;
-      color: #8080a0;
+      color: #757598;
       transition: background 0.15s, color 0.15s;
     }
     .tab-close:hover {
@@ -143,13 +161,13 @@
       color: #ffffff;
     }
     #new-tab-btn {
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       border: none;
       background: rgba(255, 255, 255, 0.04);
       border-radius: 6px;
-      color: #9090b0;
-      font-size: 16px;
+      color: #8888aa;
+      font-size: 15px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -165,12 +183,16 @@
 </head>
 <body>
   <div id="toolbar">
-    <!-- Row 1: Nav Bar (Search Bar on Top) -->
+    <!-- Row 1: Nav Bar & Search Bar (Top) -->
     <div id="navbar">
       <button class="nav-btn" id="back" title="Back">←</button>
       <button class="nav-btn" id="forward" title="Forward">→</button>
       <button class="nav-btn" id="refresh" title="Reload">↻</button>
-      <input id="urlbar" type="text" placeholder="Search with Google or enter URL..." />
+      
+      <div id="urlbar-container">
+        <span id="urlbar-icon">🔒</span>
+        <input id="urlbar" type="text" placeholder="Search with Google or enter URL..." />
+      </div>
     </div>
 
     <!-- Row 2: Tab Bar (Tabs Below Search Bar) -->
@@ -187,11 +209,12 @@
     const tabbar = document.getElementById('tabbar');
     const newTabBtn = document.getElementById('new-tab-btn');
     const urlbar = document.getElementById('urlbar');
+    const urlbarContainer = document.getElementById('urlbar-container');
+    const urlbarIcon = document.getElementById('urlbar-icon');
 
     let currentTabs = [];
     let currentActiveId = null;
 
-    // Helper: Extract human readable title from URL or name
     function formatTabTitle(tab) {
       if (tab.title && !tab.title.startsWith('Tab ')) return tab.title;
       try {
@@ -202,7 +225,6 @@
       }
     }
 
-    // --- Render Tab Bar ---
     function renderTabs() {
       const existingTabs = tabbar.querySelectorAll('.tab');
       existingTabs.forEach(t => t.remove());
@@ -235,15 +257,14 @@
       });
     }
 
-    // --- Navigation ---
     function handleNavigate() {
       const input = urlbar.value.trim();
       if (!input) return;
 
-      urlbar.classList.add('loading');
+      urlbarContainer.classList.add('loading');
       invoke('navigate', { url: input }).catch((err) => {
         console.error('Navigate error:', err);
-        urlbar.classList.remove('loading');
+        urlbarContainer.classList.remove('loading');
       });
     }
 
@@ -269,7 +290,6 @@
       invoke('create_tab', { url: 'https://www.google.com' }).catch(console.error);
     });
 
-    // --- Event Listeners from Rust ---
     listen('tabs-changed', (event) => {
       currentTabs = event.payload.tabs || [];
       currentActiveId = event.payload.active_id || null;
@@ -278,10 +298,20 @@
 
     listen('url-changed', (event) => {
       urlbar.value = event.payload;
-      urlbar.classList.remove('loading');
+      urlbarContainer.classList.remove('loading');
+
+      if (event.payload.startsWith('https://')) {
+        urlbarIcon.textContent = '🔒';
+        urlbarIcon.style.color = '#757598';
+      } else if (event.payload.startsWith('http://')) {
+        urlbarIcon.textContent = '⚠️';
+        urlbarIcon.style.color = '#e0a030';
+      } else {
+        urlbarIcon.textContent = '🔍';
+        urlbarIcon.style.color = '#757598';
+      }
     });
 
-    // --- Keyboard Shortcuts ---
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.key.toLowerCase() === 't') {
         e.preventDefault();

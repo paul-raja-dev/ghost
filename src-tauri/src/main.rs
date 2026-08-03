@@ -8,7 +8,7 @@ use url::Url;
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
 
-const TOOLBAR_HEIGHT: f64 = 72.0;
+const TOOLBAR_HEIGHT: f64 = 76.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabInfo {
@@ -344,7 +344,6 @@ fn main() {
                 fix_gtk_layout(&main_window);
             }
 
-            // Create initial default tab with Google
             let handle = app.handle().clone();
             let state = app.state::<Arc<Mutex<AppState>>>();
             let _ = create_tab(handle, state, Some("https://www.google.com".to_string()));
