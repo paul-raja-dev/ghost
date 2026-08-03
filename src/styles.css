@@ -8,7 +8,7 @@ html, body {
   height: 76px;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: transparent;
+  background: #08080e;
   color: #e2e2f0;
   user-select: none;
 }
