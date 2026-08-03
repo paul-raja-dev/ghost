@@ -59,7 +59,9 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     } else if let Some(main_window) = app_handle.get_window("main") {
         // First navigation — create the content webview
-        let size = main_window.inner_size().map_err(|e| e.to_string())?;
+        let physical_size = main_window.inner_size().map_err(|e| e.to_string())?;
+        let scale_factor = main_window.scale_factor().map_err(|e| e.to_string())?;
+        let size = physical_size.to_logical::<f64>(scale_factor);
 
         let builder = WebviewBuilder::new(
             "content",
@@ -71,8 +73,8 @@ fn navigate(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
                 builder,
                 LogicalPosition::new(0.0, TOOLBAR_HEIGHT),
                 LogicalSize::new(
-                    size.width as f64,
-                    size.height as f64 - TOOLBAR_HEIGHT,
+                    size.width,
+                    size.height - TOOLBAR_HEIGHT,
                 ),
             )
             .map_err(|e| e.to_string())?;
