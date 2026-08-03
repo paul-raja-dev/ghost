@@ -5,6 +5,8 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="hover-trigger"></div>
+
   <div id="toolbar">
     <!-- Row 1: Nav Bar & Search Bar (Top) -->
     <div id="navbar">
@@ -28,6 +30,8 @@
     const { invoke } = window.__TAURI__.core;
     const { listen } = window.__TAURI__.event;
 
+    const toolbar = document.getElementById('toolbar');
+    const hoverTrigger = document.getElementById('hover-trigger');
     const tabbar = document.getElementById('tabbar');
     const newTabBtn = document.getElementById('new-tab-btn');
     const urlbar = document.getElementById('urlbar');
@@ -35,7 +39,53 @@
 
     let currentTabs = [];
     let currentActiveId = null;
+    let isUrlbarFocused = false;
 
+    // --- Auto-Hiding Zen Mode Logic ---
+    function showToolbar() {
+      toolbar.classList.add('visible');
+    }
+
+    function hideToolbar() {
+      if (!isUrlbarFocused) {
+        toolbar.classList.remove('visible');
+      }
+    }
+
+    // Reveal when mouse approaches top edge (y <= 14px)
+    window.addEventListener('mousemove', (e) => {
+      if (e.clientY <= 14) {
+        showToolbar();
+      }
+    });
+
+    hoverTrigger.addEventListener('mouseenter', showToolbar);
+    toolbar.addEventListener('mouseenter', showToolbar);
+
+    toolbar.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        if (!isUrlbarFocused && !toolbar.matches(':hover')) {
+          hideToolbar();
+        }
+      }, 150);
+    });
+
+    urlbar.addEventListener('focus', () => {
+      isUrlbarFocused = true;
+      showToolbar();
+      urlbar.select();
+    });
+
+    urlbar.addEventListener('blur', () => {
+      isUrlbarFocused = false;
+      setTimeout(() => {
+        if (!toolbar.matches(':hover')) {
+          hideToolbar();
+        }
+      }, 150);
+    });
+
+    // --- Tab Rendering & Navigation ---
     function getDomain(urlStr) {
       try {
         const urlObj = new URL(urlStr);
@@ -60,7 +110,6 @@
         const tabEl = document.createElement('div');
         tabEl.className = `tab ${tab.id === currentActiveId ? 'active' : ''}`;
         
-        // Favicon Image
         const domain = getDomain(tab.url);
         if (domain && !tab.url.includes('newtab.html')) {
           const favEl = document.createElement('img');
@@ -101,6 +150,9 @@
       if (!input) return;
 
       urlbarContainer.classList.add('loading');
+      urlbar.blur();
+      hideToolbar();
+
       invoke('navigate', { url: input }).catch((err) => {
         console.error('Navigate error:', err);
         urlbarContainer.classList.remove('loading');
@@ -110,8 +162,6 @@
     urlbar.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleNavigate();
     });
-
-    urlbar.addEventListener('focus', () => urlbar.select());
 
     document.getElementById('back').addEventListener('click', () => {
       invoke('go_back').catch(() => {});

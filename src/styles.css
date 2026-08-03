@@ -8,9 +8,19 @@ html, body {
   height: 76px;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: #12121e;
+  background: transparent;
   color: #e2e2f0;
   user-select: none;
+}
+
+/* Hover trigger zone at top 14px of screen */
+#hover-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  z-index: 9998;
 }
 
 #toolbar {
@@ -19,6 +29,18 @@ html, body {
   height: 76px;
   background: #12121e;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  z-index: 9999;
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+}
+
+/* Slide down when visible class or hovered */
+#toolbar.visible,
+#toolbar:hover {
+  transform: translateY(0);
+  opacity: 1;
 }
 
 /* --- Row 1: Nav & Search Bar (42px) --- */
