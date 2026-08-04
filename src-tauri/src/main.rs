@@ -81,10 +81,8 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
-/// Robust GTK Layout Manager:
-/// 1. Toolbar widget (children[0]): fixed 76px height.
-/// 2. Active tab widget: shown with expand=true (fills 100% of remaining space).
-/// 3. Inactive tab widgets: hidden with expand=false.
+/// Precise GTK Child Widget Packing:
+/// Resets fixed size requests on active tab widget so GTK Box expands and fills 100% of remaining vertical height with ZERO gap.
 fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
     #[cfg(target_os = "linux")]
     {
@@ -103,10 +101,12 @@ fn fix_gtk_layout(main_window: &tauri::Window, state: &AppState) {
                 state.tabs.iter().position(|t| &t.id == active_id)
             });
 
+            // Loop over tab webview widgets (index 1..N)
             for (idx, widget) in children.iter().skip(1).enumerate() {
                 let is_active = Some(idx) == active_index;
                 if is_active {
                     widget.show();
+                    widget.set_size_request(-1, -1);
                     gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
                 } else {
                     widget.hide();
@@ -238,7 +238,7 @@ fn create_tab(
         LogicalPosition::new(0.0, 0.0),
         LogicalSize::new(
             size.width,
-            size.height,
+            (size.height - TOOLBAR_HEIGHT).max(100.0),
         ),
     ).map_err(|e| e.to_string())?;
 
