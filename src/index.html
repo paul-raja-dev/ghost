@@ -5,23 +5,16 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="hover-trigger"></div>
-
   <div id="toolbar">
-    <!-- Row 1: Nav Bar & Search Bar (Top) -->
     <div id="navbar">
       <button class="nav-btn" id="back" title="Back">←</button>
       <button class="nav-btn" id="forward" title="Forward">→</button>
       <button class="nav-btn" id="refresh" title="Reload">↻</button>
-      
       <div id="urlbar-container">
         <input id="urlbar" type="text" placeholder="Search with Google or enter URL..." />
       </div>
     </div>
-
-    <!-- Row 2: Tab Bar (Tabs Below Search Bar) -->
     <div id="tabbar">
-      <!-- Tabs injected dynamically -->
       <button id="new-tab-btn" title="New Tab (Ctrl+T)">+</button>
     </div>
   </div>
@@ -30,8 +23,6 @@
     const { invoke } = window.__TAURI__.core;
     const { listen } = window.__TAURI__.event;
 
-    const toolbar = document.getElementById('toolbar');
-    const hoverTrigger = document.getElementById('hover-trigger');
     const tabbar = document.getElementById('tabbar');
     const newTabBtn = document.getElementById('new-tab-btn');
     const urlbar = document.getElementById('urlbar');
@@ -39,53 +30,15 @@
 
     let currentTabs = [];
     let currentActiveId = null;
-    let isUrlbarFocused = false;
 
-    // --- Auto-Hiding Zen Mode Logic ---
-    function showToolbar() {
-      toolbar.classList.add('visible');
-    }
-
-    function hideToolbar() {
-      if (!isUrlbarFocused) {
-        toolbar.classList.remove('visible');
-      }
-    }
-
-    // Reveal when mouse approaches top edge (y <= 14px)
-    window.addEventListener('mousemove', (e) => {
-      if (e.clientY <= 14) {
-        showToolbar();
-      }
-    });
-
-    hoverTrigger.addEventListener('mouseenter', showToolbar);
-    toolbar.addEventListener('mouseenter', showToolbar);
-
-    toolbar.addEventListener('mouseleave', () => {
+    // When toolbar becomes visible, auto-focus URL bar
+    listen('toolbar-shown', () => {
       setTimeout(() => {
-        if (!isUrlbarFocused && !toolbar.matches(':hover')) {
-          hideToolbar();
-        }
-      }, 150);
+        urlbar.focus();
+        urlbar.select();
+      }, 50);
     });
 
-    urlbar.addEventListener('focus', () => {
-      isUrlbarFocused = true;
-      showToolbar();
-      urlbar.select();
-    });
-
-    urlbar.addEventListener('blur', () => {
-      isUrlbarFocused = false;
-      setTimeout(() => {
-        if (!toolbar.matches(':hover')) {
-          hideToolbar();
-        }
-      }, 150);
-    });
-
-    // --- Tab Rendering & Navigation ---
     function getDomain(urlStr) {
       try {
         const urlObj = new URL(urlStr);
@@ -150,9 +103,8 @@
       if (!input) return;
 
       urlbarContainer.classList.add('loading');
-      urlbar.blur();
-      hideToolbar();
-
+      // Hide toolbar after navigation
+      invoke('hide_toolbar').catch(() => {});
       invoke('navigate', { url: input }).catch((err) => {
         console.error('Navigate error:', err);
         urlbarContainer.classList.remove('loading');
@@ -161,6 +113,10 @@
 
     urlbar.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleNavigate();
+      // Escape hides toolbar
+      if (e.key === 'Escape') {
+        invoke('hide_toolbar').catch(() => {});
+      }
     });
 
     document.getElementById('back').addEventListener('click', () => {
@@ -218,6 +174,11 @@
             : (idx + 1) % currentTabs.length;
           invoke('switch_tab', { tabId: currentTabs[nextIdx].id }).catch(console.error);
         }
+      }
+      // Ctrl+B handled by GTK key handler in Rust, but also handle here as fallback
+      else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        invoke('toggle_toolbar').catch(console.error);
       }
     });
   </script>

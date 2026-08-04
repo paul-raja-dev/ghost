@@ -41,9 +41,7 @@ fn resolve_input(input: &str) -> Result<String, String> {
         return Err(format!("Blocked scheme: {}", trimmed));
     }
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        return Url::parse(trimmed)
-            .map(|u| u.to_string())
-            .map_err(|e| format!("Invalid URL: {}", e));
+        return Url::parse(trimmed).map(|u| u.to_string()).map_err(|e| format!("Invalid URL: {}", e));
     }
     let with_scheme = format!("https://{}", trimmed);
     if let Ok(parsed) = Url::parse(&with_scheme) {
@@ -58,80 +56,72 @@ fn resolve_input(input: &str) -> Result<String, String> {
 }
 
 fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(), String> {
-    let payload = TabStatePayload {
-        tabs: state.tabs.clone(),
-        active_id: state.active_id.clone(),
-    };
+    let payload = TabStatePayload { tabs: state.tabs.clone(), active_id: state.active_id.clone() };
     app_handle.emit_to("main", "tabs-changed", payload).map_err(|e| e.to_string())?;
     if let Some(active_id) = &state.active_id {
-        if let Some(active_tab) = state.tabs.iter().find(|t| &t.id == active_id) {
-            app_handle.emit_to("main", "url-changed", active_tab.url.clone()).map_err(|e| e.to_string())?;
+        if let Some(tab) = state.tabs.iter().find(|t| &t.id == active_id) {
+            app_handle.emit_to("main", "url-changed", tab.url.clone()).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
 }
 
-/// Resize active webview to fill the correct area based on toolbar visibility.
-/// This is the ONLY layout function needed. No GTK packing tricks.
-fn resize_active_webview(app_handle: &tauri::AppHandle, state: &AppState) {
-    let Some(active_id) = &state.active_id else { return };
-    let Some(main_window) = app_handle.get_window("main") else { return };
-    let Ok(physical_size) = main_window.inner_size() else { return };
-    let Ok(scale_factor) = main_window.scale_factor() else { return };
-    let size = physical_size.to_logical::<f64>(scale_factor);
-
-    let (y_offset, content_height) = if state.toolbar_visible {
-        (TOOLBAR_HEIGHT, (size.height - TOOLBAR_HEIGHT).max(1.0))
-    } else {
-        (0.0, size.height.max(1.0))
-    };
-
-    if let Some(webview) = app_handle.get_webview(active_id) {
-        let _ = webview.set_position(LogicalPosition::new(0.0, y_offset));
-        let _ = webview.set_size(LogicalSize::new(size.width, content_height));
-    }
-
-    // Also hide/show the toolbar webview (index 0 child)
-    if let Some(toolbar_wv) = app_handle.get_webview("main") {
-        if state.toolbar_visible {
-            let _ = toolbar_wv.set_position(LogicalPosition::new(0.0, 0.0));
-            let _ = toolbar_wv.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
-        }
-    }
-}
-
-/// Decide toolbar visibility based on active tab URL
 fn is_newtab_url(url: &str) -> bool {
     url == "newtab.html" || url.contains("newtab.html")
 }
 
-#[tauri::command]
-fn toggle_toolbar(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-) -> Result<bool, String> {
-    let mut state_guard = state.lock().unwrap();
-    state_guard.toolbar_visible = !state_guard.toolbar_visible;
-    let visible = state_guard.toolbar_visible;
+/// The ONLY layout function. Resizes both the toolbar webview ("main") and the active tab webview.
+fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
+    let Some(main_window) = app_handle.get_window("main") else { return };
+    let Ok(phys) = main_window.inner_size() else { return };
+    let Ok(scale) = main_window.scale_factor() else { return };
+    let size = phys.to_logical::<f64>(scale);
 
-    if visible {
+    // 1. Resize the toolbar (the "main" webview from tauri.conf.json)
+    if let Some(toolbar) = app_handle.get_webview("main") {
+        if state.toolbar_visible {
+            let _ = toolbar.set_position(LogicalPosition::new(0.0, 0.0));
+            let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
+        } else {
+            // Move toolbar off-screen (hide it) — set height to 0
+            let _ = toolbar.set_position(LogicalPosition::new(0.0, -TOOLBAR_HEIGHT));
+            let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
+        }
+    }
+
+    // 2. Resize the active content webview
+    if let Some(active_id) = &state.active_id {
+        if let Some(webview) = app_handle.get_webview(active_id) {
+            if state.toolbar_visible {
+                let _ = webview.set_position(LogicalPosition::new(0.0, TOOLBAR_HEIGHT));
+                let _ = webview.set_size(LogicalSize::new(size.width, (size.height - TOOLBAR_HEIGHT).max(1.0)));
+            } else {
+                let _ = webview.set_position(LogicalPosition::new(0.0, 0.0));
+                let _ = webview.set_size(LogicalSize::new(size.width, size.height));
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn toggle_toolbar(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<bool, String> {
+    let mut sg = state.lock().unwrap();
+    sg.toolbar_visible = !sg.toolbar_visible;
+    let vis = sg.toolbar_visible;
+    if vis {
         let _ = app_handle.emit_to("main", "toolbar-shown", ());
     } else {
         let _ = app_handle.emit_to("main", "toolbar-hidden", ());
     }
-
-    resize_active_webview(&app_handle, &state_guard);
-    Ok(visible)
+    relayout(&app_handle, &sg);
+    Ok(vis)
 }
 
 #[tauri::command]
-fn hide_toolbar(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-) -> Result<(), String> {
-    let mut state_guard = state.lock().unwrap();
-    state_guard.toolbar_visible = false;
-    resize_active_webview(&app_handle, &state_guard);
+fn hide_toolbar(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let mut sg = state.lock().unwrap();
+    sg.toolbar_visible = false;
+    relayout(&app_handle, &sg);
     Ok(())
 }
 
@@ -147,52 +137,41 @@ fn create_tab(
             let parsed: Url = resolved.parse().map_err(|e: url::ParseError| e.to_string())?;
             (resolved, WebviewUrl::External(parsed))
         }
-        _ => (
-            "newtab.html".to_string(),
-            WebviewUrl::App("newtab.html".into()),
-        ),
+        _ => ("newtab.html".to_string(), WebviewUrl::App("newtab.html".into())),
     };
 
     let main_window = app_handle.get_window("main").ok_or("Main window not found")?;
-
     let (new_tab_id, new_tab_num) = {
         let mut sg = state.lock().unwrap();
         sg.next_tab_num += 1;
         (format!("tab-{}", sg.next_tab_num), sg.next_tab_num)
     };
 
-    let physical_size = main_window.inner_size().map_err(|e| e.to_string())?;
-    let scale_factor = main_window.scale_factor().map_err(|e| e.to_string())?;
-    let size = physical_size.to_logical::<f64>(scale_factor);
+    let phys = main_window.inner_size().map_err(|e| e.to_string())?;
+    let scale = main_window.scale_factor().map_err(|e| e.to_string())?;
+    let size = phys.to_logical::<f64>(scale);
 
-    // Determine if toolbar should be visible for this tab
     let show_toolbar = !is_newtab_url(&target_url);
-    let y_offset = if show_toolbar { TOOLBAR_HEIGHT } else { 0.0 };
-    let content_height = if show_toolbar { (size.height - TOOLBAR_HEIGHT).max(1.0) } else { size.height };
+    let y = if show_toolbar { TOOLBAR_HEIGHT } else { 0.0 };
+    let h = if show_toolbar { (size.height - TOOLBAR_HEIGHT).max(1.0) } else { size.height };
 
     let builder = WebviewBuilder::new(&new_tab_id, webview_url).devtools(true);
-
     let _ = main_window.add_child(
         builder,
-        LogicalPosition::new(0.0, y_offset),
-        LogicalSize::new(size.width, content_height),
+        LogicalPosition::new(0.0, y),
+        LogicalSize::new(size.width, h),
     ).map_err(|e| e.to_string())?;
 
     {
         let mut sg = state.lock().unwrap();
-
-        // Hide old active tab
         if let Some(old_id) = &sg.active_id {
             if let Some(old_wv) = app_handle.get_webview(old_id) {
                 let _ = old_wv.hide();
             }
         }
-
-        // Show new tab
         if let Some(new_wv) = app_handle.get_webview(&new_tab_id) {
             let _ = new_wv.show();
         }
-
         sg.tabs.push(TabInfo {
             id: new_tab_id.clone(),
             title: if target_url == "newtab.html" { "New Tab".to_string() } else { format!("Tab {}", new_tab_num) },
@@ -200,150 +179,87 @@ fn create_tab(
         });
         sg.active_id = Some(new_tab_id.clone());
         sg.toolbar_visible = show_toolbar;
-
         emit_tab_state(&app_handle, &sg)?;
-        resize_active_webview(&app_handle, &sg);
+        relayout(&app_handle, &sg);
     }
-
     Ok(new_tab_id)
 }
 
 #[tauri::command]
-fn switch_tab(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-    tab_id: String,
-) -> Result<(), String> {
+fn switch_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, tab_id: String) -> Result<(), String> {
     let mut sg = state.lock().unwrap();
-    if sg.active_id.as_deref() == Some(&tab_id) {
-        return Ok(());
-    }
-
+    if sg.active_id.as_deref() == Some(&tab_id) { return Ok(()); }
     if let Some(old_id) = &sg.active_id {
-        if let Some(old_wv) = app_handle.get_webview(old_id) {
-            let _ = old_wv.hide();
-        }
+        if let Some(old_wv) = app_handle.get_webview(old_id) { let _ = old_wv.hide(); }
     }
-
     if let Some(new_wv) = app_handle.get_webview(&tab_id) {
         let _ = new_wv.show();
         let _ = new_wv.set_focus();
     } else {
-        return Err(format!("Tab webview {} not found", tab_id));
+        return Err(format!("Tab {} not found", tab_id));
     }
-
     sg.active_id = Some(tab_id.clone());
-
-    // Adaptive toolbar
-    let show_toolbar = sg.tabs.iter()
-        .find(|t| t.id == tab_id)
-        .map(|t| !is_newtab_url(&t.url))
-        .unwrap_or(false);
-    sg.toolbar_visible = show_toolbar;
-
+    sg.toolbar_visible = sg.tabs.iter().find(|t| t.id == tab_id).map(|t| !is_newtab_url(&t.url)).unwrap_or(false);
     emit_tab_state(&app_handle, &sg)?;
-    resize_active_webview(&app_handle, &sg);
-
+    relayout(&app_handle, &sg);
     Ok(())
 }
 
 #[tauri::command]
-fn close_tab(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-    tab_id: String,
-) -> Result<(), String> {
+fn close_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, tab_id: String) -> Result<(), String> {
     let mut sg = state.lock().unwrap();
-
     let pos = sg.tabs.iter().position(|t| t.id == tab_id).ok_or("Tab not found")?;
-
-    if let Some(wv) = app_handle.get_webview(&tab_id) {
-        let _ = wv.close();
-    }
-
+    if let Some(wv) = app_handle.get_webview(&tab_id) { let _ = wv.close(); }
     sg.tabs.remove(pos);
-
     if sg.active_id.as_deref() == Some(&tab_id) {
         if sg.tabs.is_empty() {
             sg.active_id = None;
             sg.toolbar_visible = false;
         } else {
-            let new_pos = if pos < sg.tabs.len() { pos } else { sg.tabs.len() - 1 };
-            let new_id = sg.tabs[new_pos].id.clone();
-            if let Some(new_wv) = app_handle.get_webview(&new_id) {
-                let _ = new_wv.show();
-                let _ = new_wv.set_focus();
-            }
-            let show_toolbar = !is_newtab_url(&sg.tabs[new_pos].url);
+            let np = if pos < sg.tabs.len() { pos } else { sg.tabs.len() - 1 };
+            let new_id = sg.tabs[np].id.clone();
+            if let Some(nw) = app_handle.get_webview(&new_id) { let _ = nw.show(); let _ = nw.set_focus(); }
+            sg.toolbar_visible = !is_newtab_url(&sg.tabs[np].url);
             sg.active_id = Some(new_id);
-            sg.toolbar_visible = show_toolbar;
         }
     }
-
     emit_tab_state(&app_handle, &sg)?;
-    resize_active_webview(&app_handle, &sg);
-
+    relayout(&app_handle, &sg);
     Ok(())
 }
 
 #[tauri::command]
-fn navigate(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-    url: String,
-) -> Result<(), String> {
+fn navigate(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, url: String) -> Result<(), String> {
     let full_url = resolve_input(&url)?;
     let url_parsed: Url = full_url.parse().map_err(|e: url::ParseError| e.to_string())?;
-
-    let active_id = {
-        let sg = state.lock().unwrap();
-        sg.active_id.clone()
-    };
-
+    let active_id = { state.lock().unwrap().active_id.clone() };
     if let Some(active_id) = active_id {
         if let Some(content) = app_handle.get_webview(&active_id) {
             content.navigate(url_parsed).map_err(|e| e.to_string())?;
-
             let mut sg = state.lock().unwrap();
-            if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == active_id) {
-                tab.url = full_url.clone();
-            }
+            if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == active_id) { tab.url = full_url.clone(); }
             sg.toolbar_visible = !is_newtab_url(&full_url);
             emit_tab_state(&app_handle, &sg)?;
-            resize_active_webview(&app_handle, &sg);
+            relayout(&app_handle, &sg);
             return Ok(());
         }
     }
-
     create_tab(app_handle, state, Some(url))?;
     Ok(())
 }
 
 #[tauri::command]
-fn update_tab_title(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-    tab_id: String,
-    title: String,
-) -> Result<(), String> {
+fn update_tab_title(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, tab_id: String, title: String) -> Result<(), String> {
     let mut sg = state.lock().unwrap();
-    if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == tab_id) {
-        tab.title = title;
-    }
+    if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == tab_id) { tab.title = title; }
     emit_tab_state(&app_handle, &sg)?;
     Ok(())
 }
 
 #[tauri::command]
-fn toggle_devtools(
-    app_handle: tauri::AppHandle,
-    state: State<'_, Arc<Mutex<AppState>>>,
-) -> Result<(), String> {
-    let active_id = {
-        let sg = state.lock().unwrap();
-        sg.active_id.clone().ok_or("No active tab")?
-    };
-    if let Some(wv) = app_handle.get_webview(&active_id) {
+fn toggle_devtools(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let id = state.lock().unwrap().active_id.clone().ok_or("No active tab")?;
+    if let Some(wv) = app_handle.get_webview(&id) {
         if wv.is_devtools_open() { wv.close_devtools(); } else { wv.open_devtools(); }
     }
     Ok(())
@@ -380,33 +296,56 @@ fn main() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
+
+            // Resize the toolbar (main webview) to 76px immediately
+            if let Some(toolbar) = app.get_webview("main") {
+                if let Some(win) = app.get_window("main") {
+                    if let (Ok(phys), Ok(scale)) = (win.inner_size(), win.scale_factor()) {
+                        let size = phys.to_logical::<f64>(scale);
+                        let _ = toolbar.set_position(LogicalPosition::new(0.0, -TOOLBAR_HEIGHT));
+                        let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
+                    }
+                }
+            }
+
             let state = app.state::<Arc<Mutex<AppState>>>();
             let _ = create_tab(handle.clone(), state, None);
+
+            // Listen for window resize to relayout
+            if let Some(main_window) = app.get_window("main") {
+                let h = handle.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Resized(_) = event {
+                        let st = h.state::<Arc<Mutex<AppState>>>();
+                        let sg = st.lock().unwrap();
+                        relayout(&h, &sg);
+                    }
+                });
+            }
 
             // Capture Ctrl+B at GTK window level
             #[cfg(target_os = "linux")]
             {
                 if let Some(main_window) = app.get_window("main") {
                     if let Ok(gtk_window) = main_window.gtk_window() {
-                        let handle_clone = handle.clone();
+                        let hc = handle.clone();
                         gtk_window.connect_key_press_event(move |_win, event| {
                             let keyval = event.keyval();
                             let ev_state = event.state();
-                            let is_ctrl = ev_state.contains(gdk::ModifierType::CONTROL_MASK);
-
-                            if is_ctrl && (keyval == gdk::keys::constants::b || keyval == gdk::keys::constants::B) {
-                                let app_st = handle_clone.state::<Arc<Mutex<AppState>>>();
-                                let mut sg = app_st.lock().unwrap();
+                            if ev_state.contains(gdk::ModifierType::CONTROL_MASK)
+                                && (keyval == gdk::keys::constants::b || keyval == gdk::keys::constants::B)
+                            {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let mut sg = st.lock().unwrap();
                                 sg.toolbar_visible = !sg.toolbar_visible;
                                 if sg.toolbar_visible {
-                                    let _ = handle_clone.emit_to("main", "toolbar-shown", ());
+                                    let _ = hc.emit_to("main", "toolbar-shown", ());
                                 } else {
-                                    let _ = handle_clone.emit_to("main", "toolbar-hidden", ());
+                                    let _ = hc.emit_to("main", "toolbar-hidden", ());
                                 }
-                                resize_active_webview(&handle_clone, &sg);
+                                relayout(&hc, &sg);
                                 return gtk::glib::Propagation::Stop;
                             }
-
                             gtk::glib::Propagation::Proceed
                         });
                     }
