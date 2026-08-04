@@ -70,21 +70,18 @@ fn is_newtab_url(url: &str) -> bool {
     url == "newtab.html" || url.contains("newtab.html")
 }
 
-/// Dynamic GTK Box & Webview Layout:
-/// Toolbar widget is child 0 in GTK Box with expand=false, fixed height 76px.
-/// Active Tab widget is child 1..N with expand=true (takes 100% remaining height).
+/// Precise GTK Box Layout:
+/// GTK Box handles top vertical stacking (Toolbar 76px + Active Content Tab).
+/// GTK automatically sizes the active tab container to 100% of remaining window height.
 fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
     let Some(main_window) = app_handle.get_window("main") else { return };
-    let Ok(phys) = main_window.inner_size() else { return };
-    let Ok(scale) = main_window.scale_factor() else { return };
-    let size = phys.to_logical::<f64>(scale);
 
     #[cfg(target_os = "linux")]
     {
         if let Ok(gtk_box) = main_window.default_vbox() {
             let children = gtk_box.children();
             if !children.is_empty() {
-                // Toolbar widget (children[0]): expand = false so GTK DOES NOT allocate 50% window height!
+                // Toolbar widget (children[0]): fixed 76px height, no expand
                 if let Some(toolbar_widget) = children.get(0) {
                     if state.toolbar_visible {
                         toolbar_widget.show();
@@ -101,7 +98,7 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                     state.tabs.iter().position(|t| &t.id == active_id)
                 });
 
-                // Tab webview widgets (children[1..N]): ONLY active tab gets expand = true!
+                // Tab webview widgets (children[1..N]): ONLY active tab gets expand=true & fill=true
                 for (idx, widget) in children.iter().skip(1).enumerate() {
                     let is_active = Some(idx) == active_index;
                     if is_active {
@@ -115,19 +112,6 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                     }
                 }
             }
-        }
-    }
-
-    // Set Webview position to (0,0) so WebKitGTK does not add secondary offset
-    if let Some(active_id) = &state.active_id {
-        if let Some(webview) = app_handle.get_webview(active_id) {
-            let h = if state.toolbar_visible {
-                (size.height - TOOLBAR_HEIGHT).max(1.0)
-            } else {
-                size.height
-            };
-            let _ = webview.set_position(LogicalPosition::new(0.0, 0.0));
-            let _ = webview.set_size(LogicalSize::new(size.width, h));
         }
     }
 }
@@ -176,18 +160,13 @@ fn create_tab(
         (format!("tab-{}", sg.next_tab_num), sg.next_tab_num)
     };
 
-    let phys = main_window.inner_size().map_err(|e| e.to_string())?;
-    let scale = main_window.scale_factor().map_err(|e| e.to_string())?;
-    let size = phys.to_logical::<f64>(scale);
-
     let show_toolbar = !is_newtab_url(&target_url);
-    let h = if show_toolbar { (size.height - TOOLBAR_HEIGHT).max(1.0) } else { size.height };
 
     let builder = WebviewBuilder::new(&new_tab_id, webview_url).devtools(true);
     let _ = main_window.add_child(
         builder,
         LogicalPosition::new(0.0, 0.0),
-        LogicalSize::new(size.width, h),
+        LogicalSize::new(800.0, 600.0),
     ).map_err(|e| e.to_string())?;
 
     {
