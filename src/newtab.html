@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ghost Shell</title>
+  <title>Ghost</title>
   <style>
     * {
       box-sizing: border-box;
@@ -10,8 +10,9 @@
     body {
       margin: 0;
       padding: 0;
-      min-height: 100vh;
-      background-color: #090910;
+      height: 100vh;
+      width: 100vw;
+      background-color: #07070c;
       color: #39ff14;
       font-family: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Code', 'Fira Code', Consolas, monospace;
       display: flex;
@@ -22,9 +23,6 @@
     }
 
     .terminal-prompt {
-      font-size: 1.3rem;
-      font-weight: 500;
-      letter-spacing: 0.05em;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -37,10 +35,12 @@
       cursor: text;
     }
 
-    .prompt-symbol {
+    .prompt-label {
       color: #7878a0;
+      font-weight: 500;
+      font-size: 1.25rem;
       flex-shrink: 0;
-      font-weight: 600;
+      letter-spacing: 0.05em;
     }
 
     #cli-input {
@@ -49,18 +49,23 @@
       border: none;
       color: #39ff14;
       font-family: inherit;
-      font-size: 1.3rem;
+      font-size: 1.25rem;
+      font-weight: 500;
       outline: none;
       caret-color: #39ff14;
       min-width: 0;
       user-select: text;
       -webkit-user-select: text;
     }
+
+    #cli-input::placeholder {
+      color: #2a2a40;
+    }
   </style>
 </head>
 <body>
   <div class="terminal-prompt" id="prompt-box">
-    <span class="prompt-symbol">ghost >></span>
+    <span class="prompt-label">ghost >></span>
     <input id="cli-input" type="text" autofocus autocomplete="off" spellcheck="false" />
   </div>
 

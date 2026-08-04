@@ -8,7 +8,7 @@ use url::Url;
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
 
-const TOOLBAR_HEIGHT: f64 = 76.0;
+const TOOLBAR_HEIGHT: f64 = 42.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabInfo {
@@ -17,12 +17,23 @@ pub struct TabInfo {
     pub url: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AppState {
     pub tabs: Vec<TabInfo>,
     pub active_id: Option<String>,
     pub next_tab_num: usize,
     pub toolbar_visible: bool,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            tabs: Vec::new(),
+            active_id: None,
+            next_tab_num: 0,
+            toolbar_visible: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +66,28 @@ fn resolve_input(input: &str) -> Result<String, String> {
     Ok(format!("https://www.google.com/search?q={}", encoded))
 }
 
+fn get_session_file_path(app_handle: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    if let Ok(dir) = app_handle.path().app_config_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        return Some(dir.join("session.json"));
+    }
+    None
+}
+
+fn save_session(app_handle: &tauri::AppHandle, state: &AppState) {
+    if let Some(path) = get_session_file_path(app_handle) {
+        let payload = TabStatePayload {
+            tabs: state.tabs.clone(),
+            active_id: state.active_id.clone(),
+        };
+        if let Ok(data) = serde_json::to_string_pretty(&payload) {
+            let _ = std::fs::write(path, data);
+        }
+    }
+}
+
 fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(), String> {
+    save_session(app_handle, state);
     let payload = TabStatePayload { tabs: state.tabs.clone(), active_id: state.active_id.clone() };
     app_handle.emit_to("main", "tabs-changed", payload).map_err(|e| e.to_string())?;
     if let Some(active_id) = &state.active_id {
@@ -70,25 +102,39 @@ fn is_newtab_url(url: &str) -> bool {
     url == "newtab.html" || url.contains("newtab.html")
 }
 
-/// Precise GTK Box Layout:
-/// GTK Box handles top vertical stacking (Toolbar 76px + Active Content Tab).
-/// GTK automatically sizes the active tab container to 100% of remaining window height.
 fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
     let Some(main_window) = app_handle.get_window("main") else { return };
+    let Ok(size) = main_window.inner_size() else { return };
+    let factor = main_window.scale_factor().unwrap_or(1.0);
+    let win_w = (size.width as f64 / factor) as i32;
+    let win_h = (size.height as f64 / factor) as i32;
+    let toolbar_h = if state.toolbar_visible { TOOLBAR_HEIGHT as i32 } else { 0 };
+
+    println!(
+        "[GHOST DEBUG] relayout: win={}x{}, toolbar_h={}, active_id={:?}",
+        win_w, win_h, toolbar_h, state.active_id
+    );
 
     #[cfg(target_os = "linux")]
     {
         if let Ok(gtk_box) = main_window.default_vbox() {
             let children = gtk_box.children();
             if !children.is_empty() {
-                // Toolbar widget (children[0]): fixed 76px height, no expand
+                // Toolbar widget (children[0])
                 if let Some(toolbar_widget) = children.get(0) {
                     if state.toolbar_visible {
-                        toolbar_widget.show();
+                        toolbar_widget.show_all();
+                        toolbar_widget.set_vexpand(false);
+                        toolbar_widget.set_valign(gtk::Align::Start);
                         toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
                         gtk_box.set_child_packing(toolbar_widget, false, false, 0, gtk::PackType::Start);
+                        let alloc = gdk::Rectangle::new(0, 0, win_w, toolbar_h);
+                        toolbar_widget.size_allocate(&alloc);
+                        toolbar_widget.queue_resize();
+                        toolbar_widget.queue_draw();
                     } else {
                         toolbar_widget.hide();
+                        toolbar_widget.set_vexpand(false);
                         toolbar_widget.set_size_request(-1, 0);
                         gtk_box.set_child_packing(toolbar_widget, false, false, 0, gtk::PackType::Start);
                     }
@@ -98,18 +144,58 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                     state.tabs.iter().position(|t| &t.id == active_id)
                 });
 
-                // Tab webview widgets (children[1..N]): ONLY active tab gets expand=true & fill=true
+                // Tab webview widgets (children[1..N])
+                let content_h = (win_h - toolbar_h).max(0);
                 for (idx, widget) in children.iter().skip(1).enumerate() {
                     let is_active = Some(idx) == active_index;
                     if is_active {
-                        widget.show();
+                        widget.show_all();
+                        widget.set_vexpand(true);
+                        widget.set_valign(gtk::Align::Fill);
                         widget.set_size_request(-1, -1);
                         gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
+                        let alloc = gdk::Rectangle::new(0, toolbar_h, win_w, content_h);
+                        widget.size_allocate(&alloc);
+                        widget.queue_resize();
+                        widget.queue_draw();
                     } else {
                         widget.hide();
+                        widget.set_vexpand(false);
                         widget.set_size_request(-1, 0);
                         gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
                     }
+                }
+                gtk_box.queue_resize();
+                gtk_box.queue_draw();
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let toolbar_h_f = if state.toolbar_visible { TOOLBAR_HEIGHT } else { 0.0 };
+        let logical_w = win_w as f64;
+        let logical_h = win_h as f64;
+
+        if let Some(main_wv) = app_handle.get_webview("main") {
+            if state.toolbar_visible {
+                let _ = main_wv.show();
+                let _ = main_wv.set_position(LogicalPosition::new(0.0, 0.0));
+                let _ = main_wv.set_size(LogicalSize::new(logical_w, toolbar_h_f));
+            } else {
+                let _ = main_wv.hide();
+            }
+        }
+
+        for tab in &state.tabs {
+            if let Some(wv) = app_handle.get_webview(&tab.id) {
+                if Some(&tab.id) == state.active_id.as_ref() {
+                    let _ = wv.show();
+                    let _ = wv.set_position(LogicalPosition::new(0.0, toolbar_h_f));
+                    let content_h = (logical_h - toolbar_h_f).max(0.0);
+                    let _ = wv.set_size(LogicalSize::new(logical_w, content_h));
+                } else {
+                    let _ = wv.hide();
                 }
             }
         }
@@ -119,21 +205,16 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
 #[tauri::command]
 fn toggle_toolbar(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<bool, String> {
     let mut sg = state.lock().unwrap();
-    sg.toolbar_visible = !sg.toolbar_visible;
-    let vis = sg.toolbar_visible;
-    if vis {
-        let _ = app_handle.emit_to("main", "toolbar-shown", ());
-    } else {
-        let _ = app_handle.emit_to("main", "toolbar-hidden", ());
-    }
+    sg.toolbar_visible = true;
+    let _ = app_handle.emit_to("main", "toolbar-shown", ());
     relayout(&app_handle, &sg);
-    Ok(vis)
+    Ok(true)
 }
 
 #[tauri::command]
 fn hide_toolbar(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
     let mut sg = state.lock().unwrap();
-    sg.toolbar_visible = false;
+    sg.toolbar_visible = true;
     relayout(&app_handle, &sg);
     Ok(())
 }
@@ -161,8 +242,35 @@ fn create_tab(
     };
 
     let show_toolbar = !is_newtab_url(&target_url);
+    println!(
+        "[GHOST DEBUG] create_tab: id={}, url={}, show_toolbar={}",
+        new_tab_id, target_url, show_toolbar
+    );
 
-    let builder = WebviewBuilder::new(&new_tab_id, webview_url).devtools(true);
+    let init_script = r#"
+        (function() {
+            window.addEventListener('keydown', function(e) {
+                var key = e.key ? e.key.toLowerCase() : '';
+                if ((e.ctrlKey || e.metaKey) && (key === 'b' || key === 'l')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) {
+                        window.__TAURI__.core.invoke('toggle_toolbar').catch(function(){});
+                    }
+                } else if ((e.ctrlKey || e.metaKey) && key === 't') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) {
+                        window.__TAURI__.core.invoke('create_tab', { url: null }).catch(function(){});
+                    }
+                }
+            }, true);
+        })();
+    "#;
+
+    let builder = WebviewBuilder::new(&new_tab_id, webview_url)
+        .devtools(true)
+        .initialization_script(init_script);
     let _ = main_window.add_child(
         builder,
         LogicalPosition::new(0.0, 0.0),
@@ -185,7 +293,7 @@ fn create_tab(
             url: target_url.clone(),
         });
         sg.active_id = Some(new_tab_id.clone());
-        sg.toolbar_visible = show_toolbar;
+        sg.toolbar_visible = true;
         emit_tab_state(&app_handle, &sg)?;
         relayout(&app_handle, &sg);
     }
@@ -194,6 +302,7 @@ fn create_tab(
 
 #[tauri::command]
 fn switch_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, tab_id: String) -> Result<(), String> {
+    println!("[GHOST DEBUG] switch_tab: to={}", tab_id);
     let mut sg = state.lock().unwrap();
     if sg.active_id.as_deref() == Some(&tab_id) { return Ok(()); }
     if let Some(old_id) = &sg.active_id {
@@ -206,7 +315,7 @@ fn switch_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>
         return Err(format!("Tab {} not found", tab_id));
     }
     sg.active_id = Some(tab_id.clone());
-    sg.toolbar_visible = sg.tabs.iter().find(|t| t.id == tab_id).map(|t| !is_newtab_url(&t.url)).unwrap_or(false);
+    sg.toolbar_visible = true;
     emit_tab_state(&app_handle, &sg)?;
     relayout(&app_handle, &sg);
     Ok(())
@@ -214,6 +323,7 @@ fn switch_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>
 
 #[tauri::command]
 fn close_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, tab_id: String) -> Result<(), String> {
+    println!("[GHOST DEBUG] close_tab: id={}", tab_id);
     let mut sg = state.lock().unwrap();
     let pos = sg.tabs.iter().position(|t| t.id == tab_id).ok_or("Tab not found")?;
     if let Some(wv) = app_handle.get_webview(&tab_id) { let _ = wv.close(); }
@@ -221,12 +331,12 @@ fn close_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>
     if sg.active_id.as_deref() == Some(&tab_id) {
         if sg.tabs.is_empty() {
             sg.active_id = None;
-            sg.toolbar_visible = false;
+            sg.toolbar_visible = true;
         } else {
             let np = if pos < sg.tabs.len() { pos } else { sg.tabs.len() - 1 };
             let new_id = sg.tabs[np].id.clone();
             if let Some(nw) = app_handle.get_webview(&new_id) { let _ = nw.show(); let _ = nw.set_focus(); }
-            sg.toolbar_visible = !is_newtab_url(&sg.tabs[np].url);
+            sg.toolbar_visible = true;
             sg.active_id = Some(new_id);
         }
     }
@@ -237,6 +347,7 @@ fn close_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>
 
 #[tauri::command]
 fn navigate(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, url: String) -> Result<(), String> {
+    println!("[GHOST DEBUG] navigate: input={}", url);
     let full_url = resolve_input(&url)?;
     let url_parsed: Url = full_url.parse().map_err(|e: url::ParseError| e.to_string())?;
     let active_id = { state.lock().unwrap().active_id.clone() };
@@ -245,7 +356,7 @@ fn navigate(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>
             content.navigate(url_parsed).map_err(|e| e.to_string())?;
             let mut sg = state.lock().unwrap();
             if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == active_id) { tab.url = full_url.clone(); }
-            sg.toolbar_visible = !is_newtab_url(&full_url);
+            sg.toolbar_visible = true;
             emit_tab_state(&app_handle, &sg)?;
             relayout(&app_handle, &sg);
             return Ok(());
@@ -290,7 +401,38 @@ fn reload(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) 
     app_handle.get_webview(&id).ok_or("Not found")?.eval("location.reload()").map_err(|e| e.to_string())
 }
 
+fn init_env_flags() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Default WEBKIT_DISABLE_DMABUF_RENDERER to 1 on Linux to prevent WebKitGTK black surface buffer glitches
+    if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() && !args.iter().any(|a| a == "--enable-dmabuf") {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
+    let disable_compositing = std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").ok().as_deref() == Some("1")
+        || std::env::var("GHOST_DISABLE_COMPOSITING").ok().as_deref() == Some("1")
+        || args.iter().any(|a| a == "--disable-compositing");
+
+    if disable_compositing {
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    }
+
+    println!("============================================================");
+    println!("[GHOST LOG] WebKitGTK Rendering Environment Flags:");
+    println!(
+        "  WEBKIT_DISABLE_COMPOSITING_MODE = {}",
+        std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").unwrap_or_else(|_| "0".into())
+    );
+    println!(
+        "  WEBKIT_DISABLE_DMABUF_RENDERER  = {}",
+        std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").unwrap_or_else(|_| "0".into())
+    );
+    println!("============================================================");
+}
+
 fn main() {
+    init_env_flags();
+
     let app_state = Arc::new(Mutex::new(AppState::default()));
 
     tauri::Builder::default()
@@ -305,18 +447,34 @@ fn main() {
             let handle = app.handle().clone();
 
             let state = app.state::<Arc<Mutex<AppState>>>();
+            if let Some(session_path) = get_session_file_path(&handle) {
+                let _ = std::fs::remove_file(session_path);
+            }
             let _ = create_tab(handle.clone(), state, None);
 
             // Listen for window resize to relayout
             if let Some(main_window) = app.get_window("main") {
                 let h = handle.clone();
                 main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Resized(_) = event {
-                        let st = h.state::<Arc<Mutex<AppState>>>();
-                        let sg = st.lock().unwrap();
-                        relayout(&h, &sg);
+                    match event {
+                        tauri::WindowEvent::Resized(physical_size) => {
+                            println!("[GHOST DEBUG] Window Resized event: physical={}x{}", physical_size.width, physical_size.height);
+                            let st = h.state::<Arc<Mutex<AppState>>>();
+                            let sg = st.lock().unwrap();
+                            relayout(&h, &sg);
+                        }
+                        tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                            println!("[GHOST DEBUG] ScaleFactorChanged event: factor={}", scale_factor);
+                            let st = h.state::<Arc<Mutex<AppState>>>();
+                            let sg = st.lock().unwrap();
+                            relayout(&h, &sg);
+                        }
+                        _ => {}
                     }
                 });
+
+                // NOTE: Do NOT use connect_size_allocate here — it fires during relayout
+                // while Ctrl+B already holds the AppState mutex, causing a deadlock.
             }
 
             // Capture Ctrl+B at GTK window level

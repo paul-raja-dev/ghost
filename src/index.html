@@ -6,13 +6,9 @@
 </head>
 <body>
   <div id="toolbar">
-    <div id="navbar">
-      <button class="nav-btn" id="back" title="Back">←</button>
-      <button class="nav-btn" id="forward" title="Forward">→</button>
-      <button class="nav-btn" id="refresh" title="Reload">↻</button>
-      <div id="urlbar-container">
-        <input id="urlbar" type="text" placeholder="Search with Google or enter URL..." />
-      </div>
+    <span class="prompt-prefix">ghost >></span>
+    <div id="urlbar-container">
+      <input id="urlbar" type="text" placeholder="type url or search..." />
     </div>
     <div id="tabbar">
       <button id="new-tab-btn" title="New Tab (Ctrl+T)">+</button>
@@ -26,33 +22,19 @@
     const tabbar = document.getElementById('tabbar');
     const newTabBtn = document.getElementById('new-tab-btn');
     const urlbar = document.getElementById('urlbar');
-    const urlbarContainer = document.getElementById('urlbar-container');
 
     let currentTabs = [];
     let currentActiveId = null;
 
-    // When toolbar becomes visible, auto-focus URL bar
-    listen('toolbar-shown', () => {
-      setTimeout(() => {
-        urlbar.focus();
-        urlbar.select();
-      }, 50);
-    });
-
-    function getDomain(urlStr) {
-      try {
-        const urlObj = new URL(urlStr);
-        return urlObj.hostname.replace(/^www\./, '');
-      } catch (e) {
-        return '';
-      }
-    }
-
     function formatTabTitle(tab) {
       if (tab.title && !tab.title.startsWith('Tab ')) return tab.title;
-      if (tab.url && tab.url.includes('newtab.html')) return 'New Tab';
-      const domain = getDomain(tab.url);
-      return domain || tab.url || 'New Tab';
+      if (tab.url && tab.url.includes('newtab.html')) return 'new tab';
+      try {
+        const u = new URL(tab.url);
+        return u.hostname.replace(/^www\./, '');
+      } catch (e) {
+        return tab.url || 'new tab';
+      }
     }
 
     function renderTabs() {
@@ -62,15 +44,6 @@
       currentTabs.forEach(tab => {
         const tabEl = document.createElement('div');
         tabEl.className = `tab ${tab.id === currentActiveId ? 'active' : ''}`;
-        
-        const domain = getDomain(tab.url);
-        if (domain && !tab.url.includes('newtab.html')) {
-          const favEl = document.createElement('img');
-          favEl.className = 'tab-favicon';
-          favEl.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-          favEl.onerror = () => { favEl.style.display = 'none'; };
-          tabEl.appendChild(favEl);
-        }
 
         const titleEl = document.createElement('span');
         titleEl.className = 'tab-title';
@@ -80,7 +53,6 @@
         const closeEl = document.createElement('span');
         closeEl.className = 'tab-close';
         closeEl.textContent = '×';
-        closeEl.title = 'Close Tab';
 
         closeEl.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -101,34 +73,11 @@
     function handleNavigate() {
       const input = urlbar.value.trim();
       if (!input) return;
-
-      urlbarContainer.classList.add('loading');
-      // Hide toolbar after navigation
-      invoke('hide_toolbar').catch(() => {});
-      invoke('navigate', { url: input }).catch((err) => {
-        console.error('Navigate error:', err);
-        urlbarContainer.classList.remove('loading');
-      });
+      invoke('navigate', { url: input }).catch(console.error);
     }
 
     urlbar.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleNavigate();
-      // Escape hides toolbar
-      if (e.key === 'Escape') {
-        invoke('hide_toolbar').catch(() => {});
-      }
-    });
-
-    document.getElementById('back').addEventListener('click', () => {
-      invoke('go_back').catch(() => {});
-    });
-
-    document.getElementById('forward').addEventListener('click', () => {
-      invoke('go_forward').catch(() => {});
-    });
-
-    document.getElementById('refresh').addEventListener('click', () => {
-      invoke('reload').catch(() => {});
     });
 
     newTabBtn.addEventListener('click', () => {
@@ -142,43 +91,38 @@
     });
 
     listen('url-changed', (event) => {
-      if (event.payload && event.payload.includes('newtab.html')) {
+      const targetUrl = event.payload || '';
+      if (targetUrl.includes('newtab.html')) {
         urlbar.value = '';
       } else {
-        urlbar.value = event.payload;
+        urlbar.value = targetUrl;
       }
-      urlbarContainer.classList.remove('loading');
     });
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i')) {
+      const key = e.key.toLowerCase();
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && key === 'i')) {
         e.preventDefault();
         invoke('toggle_devtools').catch(console.error);
       }
-      else if (e.ctrlKey && e.key.toLowerCase() === 't') {
+      else if (e.key === 'F5' || (e.ctrlKey && key === 'r')) {
+        e.preventDefault();
+        invoke('reload').catch(console.error);
+      }
+      else if (e.ctrlKey && key === 'l') {
+        e.preventDefault();
+        urlbar.focus();
+        urlbar.select();
+      }
+      else if (e.ctrlKey && key === 't') {
         e.preventDefault();
         invoke('create_tab', { url: null }).catch(console.error);
       }
-      else if (e.ctrlKey && e.key.toLowerCase() === 'w') {
+      else if (e.ctrlKey && key === 'w') {
         e.preventDefault();
         if (currentActiveId) {
           invoke('close_tab', { tabId: currentActiveId }).catch(console.error);
         }
-      }
-      else if (e.ctrlKey && e.key === 'Tab') {
-        e.preventDefault();
-        if (currentTabs.length > 1) {
-          const idx = currentTabs.findIndex(t => t.id === currentActiveId);
-          const nextIdx = e.shiftKey
-            ? (idx - 1 + currentTabs.length) % currentTabs.length
-            : (idx + 1) % currentTabs.length;
-          invoke('switch_tab', { tabId: currentTabs[nextIdx].id }).catch(console.error);
-        }
-      }
-      // Ctrl+B handled by GTK key handler in Rust, but also handle here as fallback
-      else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
-        e.preventDefault();
-        invoke('toggle_toolbar').catch(console.error);
       }
     });
   </script>
