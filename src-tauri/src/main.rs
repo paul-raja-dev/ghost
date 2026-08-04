@@ -70,35 +70,62 @@ fn is_newtab_url(url: &str) -> bool {
     url == "newtab.html" || url.contains("newtab.html")
 }
 
-/// The ONLY layout function. Resizes both the toolbar webview ("main") and the active tab webview.
+/// Dynamic GTK Box & Webview Layout:
+/// GTK Box handles top vertical stacking (Toolbar 76px + Active Content Tab).
+/// Webview internal position is ALWAYS (0,0) to prevent double y-offset gaps.
 fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
     let Some(main_window) = app_handle.get_window("main") else { return };
     let Ok(phys) = main_window.inner_size() else { return };
     let Ok(scale) = main_window.scale_factor() else { return };
     let size = phys.to_logical::<f64>(scale);
 
-    // 1. Resize the toolbar (the "main" webview from tauri.conf.json)
-    if let Some(toolbar) = app_handle.get_webview("main") {
-        if state.toolbar_visible {
-            let _ = toolbar.set_position(LogicalPosition::new(0.0, 0.0));
-            let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
-        } else {
-            // Move toolbar off-screen (hide it) — set height to 0
-            let _ = toolbar.set_position(LogicalPosition::new(0.0, -TOOLBAR_HEIGHT));
-            let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(gtk_box) = main_window.default_vbox() {
+            let children = gtk_box.children();
+            if !children.is_empty() {
+                // Toolbar widget (children[0])
+                if let Some(toolbar_widget) = children.get(0) {
+                    toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
+                    if state.toolbar_visible {
+                        toolbar_widget.show();
+                        gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
+                    } else {
+                        toolbar_widget.hide();
+                        gtk_box.set_child_packing(toolbar_widget, false, false, 0, gtk::PackType::Start);
+                    }
+                }
+
+                let active_index = state.active_id.as_ref().and_then(|active_id| {
+                    state.tabs.iter().position(|t| &t.id == active_id)
+                });
+
+                // Tab webview widgets (children[1..N])
+                for (idx, widget) in children.iter().skip(1).enumerate() {
+                    let is_active = Some(idx) == active_index;
+                    if is_active {
+                        widget.show();
+                        widget.set_size_request(-1, -1);
+                        gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
+                    } else {
+                        widget.hide();
+                        gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
+                    }
+                }
+            }
         }
     }
 
-    // 2. Resize the active content webview
+    // Set Webview position to (0,0) so WebKitGTK does not add secondary offset
     if let Some(active_id) = &state.active_id {
         if let Some(webview) = app_handle.get_webview(active_id) {
-            if state.toolbar_visible {
-                let _ = webview.set_position(LogicalPosition::new(0.0, TOOLBAR_HEIGHT));
-                let _ = webview.set_size(LogicalSize::new(size.width, (size.height - TOOLBAR_HEIGHT).max(1.0)));
+            let h = if state.toolbar_visible {
+                (size.height - TOOLBAR_HEIGHT).max(1.0)
             } else {
-                let _ = webview.set_position(LogicalPosition::new(0.0, 0.0));
-                let _ = webview.set_size(LogicalSize::new(size.width, size.height));
-            }
+                size.height
+            };
+            let _ = webview.set_position(LogicalPosition::new(0.0, 0.0));
+            let _ = webview.set_size(LogicalSize::new(size.width, h));
         }
     }
 }
@@ -152,13 +179,12 @@ fn create_tab(
     let size = phys.to_logical::<f64>(scale);
 
     let show_toolbar = !is_newtab_url(&target_url);
-    let y = if show_toolbar { TOOLBAR_HEIGHT } else { 0.0 };
     let h = if show_toolbar { (size.height - TOOLBAR_HEIGHT).max(1.0) } else { size.height };
 
     let builder = WebviewBuilder::new(&new_tab_id, webview_url).devtools(true);
     let _ = main_window.add_child(
         builder,
-        LogicalPosition::new(0.0, y),
+        LogicalPosition::new(0.0, 0.0),
         LogicalSize::new(size.width, h),
     ).map_err(|e| e.to_string())?;
 
@@ -296,17 +322,6 @@ fn main() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-
-            // Resize the toolbar (main webview) to 76px immediately
-            if let Some(toolbar) = app.get_webview("main") {
-                if let Some(win) = app.get_window("main") {
-                    if let (Ok(phys), Ok(scale)) = (win.inner_size(), win.scale_factor()) {
-                        let size = phys.to_logical::<f64>(scale);
-                        let _ = toolbar.set_position(LogicalPosition::new(0.0, -TOOLBAR_HEIGHT));
-                        let _ = toolbar.set_size(LogicalSize::new(size.width, TOOLBAR_HEIGHT));
-                    }
-                }
-            }
 
             let state = app.state::<Arc<Mutex<AppState>>>();
             let _ = create_tab(handle.clone(), state, None);
