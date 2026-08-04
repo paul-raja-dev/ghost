@@ -5,40 +5,74 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 42px;
+  height: 76px;
   overflow: hidden;
-  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Code', 'Fira Code', Consolas, monospace;
-  background: #07070c;
-  color: #39ff14;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #090910;
+  color: #e2e2f0;
   user-select: none;
 }
 
 #toolbar {
   display: flex;
-  align-items: center;
-  height: 42px;
-  padding: 0 16px;
-  gap: 12px;
-  background: #07070c;
-  border-bottom: 1px solid rgba(57, 255, 20, 0.12);
+  flex-direction: column;
+  height: 76px;
+  background: #090910;
 }
 
-.prompt-prefix {
-  color: #7878a0;
-  font-weight: 500;
+/* ── Row 1: Nav + URL bar (42px) ───────────────────────── */
+#navbar {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 10px;
+  gap: 8px;
+  background: #0d0d16;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nav-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #9595b8;
   font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.nav-btn:active {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 #urlbar-container {
   flex: 1;
   display: flex;
   align-items: center;
-  height: 28px;
-  padding: 0;
-  border: none;
-  background: transparent;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #141420;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
   min-width: 0;
+}
+
+#urlbar-container:focus-within {
+  border-color: rgba(57, 255, 20, 0.4);
+  background: #1a1a2a;
+  box-shadow: 0 0 0 2px rgba(57, 255, 20, 0.08);
 }
 
 #urlbar {
@@ -46,78 +80,110 @@ html, body {
   height: 100%;
   border: none;
   background: transparent;
-  color: #39ff14;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
+  color: #f0f0ff;
+  font-size: 13px;
+  font-weight: 400;
   outline: none;
-  caret-color: #39ff14;
   min-width: 0;
 }
 
 #urlbar::placeholder {
-  color: #2a2a40;
+  color: #505068;
 }
 
+#urlbar-container.loading {
+  border-color: rgba(80, 200, 255, 0.5);
+}
+
+/* ── Row 2: Tab strip (34px) ────────────────────────────── */
 #tabbar {
   display: flex;
   align-items: center;
+  height: 34px;
+  padding: 0 8px;
   gap: 4px;
-  flex-shrink: 0;
+  background: #090910;
+  overflow-x: auto;
+}
+
+#tabbar::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.02);
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px 6px 0 0;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  color: #606080;
-  font-size: 11px;
+  border-bottom: none;
+  color: #8888aa;
+  font-size: 12px;
   cursor: pointer;
-  max-width: 140px;
-  transition: background 0.15s, color 0.15s;
+  max-width: 180px;
+  min-width: 80px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #d0d0e8;
 }
 
 .tab.active {
-  background: rgba(57, 255, 20, 0.08);
+  background: #181826;
   border-color: rgba(57, 255, 20, 0.25);
-  color: #39ff14;
+  border-bottom: 2px solid #39ff14;
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .tab-title {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .tab-close {
-  color: #606080;
-  font-size: 11px;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #666688;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
 .tab-close:hover {
-  color: #ff4444;
+  background: rgba(255, 255, 255, 0.15);
+  color: #ff5555;
 }
 
 #new-tab-btn {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: none;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
-  color: #39ff14;
-  font-size: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  color: #8888aa;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
 #new-tab-btn:hover {
-  background: rgba(57, 255, 20, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }

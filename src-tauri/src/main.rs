@@ -8,7 +8,7 @@ use url::Url;
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
 
-const TOOLBAR_HEIGHT: f64 = 42.0;
+const TOOLBAR_HEIGHT: f64 = 76.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabInfo {
