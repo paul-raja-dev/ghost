@@ -71,8 +71,8 @@ fn is_newtab_url(url: &str) -> bool {
 }
 
 /// Dynamic GTK Box & Webview Layout:
-/// GTK Box handles top vertical stacking (Toolbar 76px + Active Content Tab).
-/// Webview internal position is ALWAYS (0,0) to prevent double y-offset gaps.
+/// Toolbar widget is child 0 in GTK Box with expand=false, fixed height 76px.
+/// Active Tab widget is child 1..N with expand=true (takes 100% remaining height).
 fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
     let Some(main_window) = app_handle.get_window("main") else { return };
     let Ok(phys) = main_window.inner_size() else { return };
@@ -84,14 +84,15 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
         if let Ok(gtk_box) = main_window.default_vbox() {
             let children = gtk_box.children();
             if !children.is_empty() {
-                // Toolbar widget (children[0])
+                // Toolbar widget (children[0]): expand = false so GTK DOES NOT allocate 50% window height!
                 if let Some(toolbar_widget) = children.get(0) {
-                    toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
                     if state.toolbar_visible {
                         toolbar_widget.show();
-                        gtk_box.set_child_packing(toolbar_widget, false, true, 0, gtk::PackType::Start);
+                        toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
+                        gtk_box.set_child_packing(toolbar_widget, false, false, 0, gtk::PackType::Start);
                     } else {
                         toolbar_widget.hide();
+                        toolbar_widget.set_size_request(-1, 0);
                         gtk_box.set_child_packing(toolbar_widget, false, false, 0, gtk::PackType::Start);
                     }
                 }
@@ -100,7 +101,7 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                     state.tabs.iter().position(|t| &t.id == active_id)
                 });
 
-                // Tab webview widgets (children[1..N])
+                // Tab webview widgets (children[1..N]): ONLY active tab gets expand = true!
                 for (idx, widget) in children.iter().skip(1).enumerate() {
                     let is_active = Some(idx) == active_index;
                     if is_active {
@@ -109,6 +110,7 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                         gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
                     } else {
                         widget.hide();
+                        widget.set_size_request(-1, 0);
                         gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
                     }
                 }
