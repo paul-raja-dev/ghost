@@ -409,11 +409,8 @@ fn init_env_flags() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
-    let disable_compositing = std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").ok().as_deref() == Some("1")
-        || std::env::var("GHOST_DISABLE_COMPOSITING").ok().as_deref() == Some("1")
-        || args.iter().any(|a| a == "--disable-compositing");
-
-    if disable_compositing {
+    // Default WEBKIT_DISABLE_COMPOSITING_MODE to 1 on Linux to prevent WebKitGTK WebProcess crash on heavy sites like Google search
+    if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() && !args.iter().any(|a| a == "--enable-compositing") {
         std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
     }
 
