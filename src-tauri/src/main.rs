@@ -350,8 +350,23 @@ fn navigate(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>
     println!("[GHOST DEBUG] navigate: input={}", url);
     let full_url = resolve_input(&url)?;
     let url_parsed: Url = full_url.parse().map_err(|e: url::ParseError| e.to_string())?;
-    let active_id = { state.lock().unwrap().active_id.clone() };
+
+    let (active_id, is_newtab) = {
+        let sg = state.lock().unwrap();
+        let active_id = sg.active_id.clone();
+        let is_newtab = active_id.as_ref().and_then(|id| {
+            sg.tabs.iter().find(|t| &t.id == id).map(|t| is_newtab_url(&t.url))
+        }).unwrap_or(false);
+        (active_id, is_newtab)
+    };
+
     if let Some(active_id) = active_id {
+        if is_newtab {
+            close_tab(app_handle.clone(), state.clone(), active_id)?;
+            create_tab(app_handle, state, Some(url))?;
+            return Ok(());
+        }
+
         if let Some(content) = app_handle.get_webview(&active_id) {
             content.navigate(url_parsed).map_err(|e| e.to_string())?;
             let mut sg = state.lock().unwrap();
@@ -404,6 +419,11 @@ fn reload(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) 
 fn init_env_flags() {
     let args: Vec<String> = std::env::args().collect();
 
+    // Disable WebKit sandboxing issues on Linux
+    if std::env::var("WEBKIT_FORCE_SANDBOX").is_err() {
+        std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
+    }
+
     // Default WEBKIT_DISABLE_DMABUF_RENDERER to 1 on Linux to prevent WebKitGTK black surface buffer glitches
     if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() && !args.iter().any(|a| a == "--enable-dmabuf") {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
@@ -416,6 +436,10 @@ fn init_env_flags() {
 
     println!("============================================================");
     println!("[GHOST LOG] WebKitGTK Rendering Environment Flags:");
+    println!(
+        "  WEBKIT_FORCE_SANDBOX            = {}",
+        std::env::var("WEBKIT_FORCE_SANDBOX").unwrap_or_else(|_| "1".into())
+    );
     println!(
         "  WEBKIT_DISABLE_COMPOSITING_MODE = {}",
         std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").unwrap_or_else(|_| "0".into())
