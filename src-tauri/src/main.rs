@@ -62,8 +62,9 @@ fn resolve_input(input: &str) -> Result<String, String> {
             }
         }
     }
-    let encoded = trimmed.replace(' ', "+");
-    Ok(format!("https://www.google.com/search?q={}", encoded))
+    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+    serializer.append_pair("q", trimmed);
+    Ok(format!("https://www.google.com/search?{}", serializer.finish()))
 }
 
 fn get_session_file_path(app_handle: &tauri::AppHandle) -> Option<std::path::PathBuf> {
@@ -128,10 +129,6 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                         toolbar_widget.set_valign(gtk::Align::Start);
                         toolbar_widget.set_size_request(-1, TOOLBAR_HEIGHT as i32);
                         gtk_box.set_child_packing(toolbar_widget, false, false, 0, gtk::PackType::Start);
-                        let alloc = gdk::Rectangle::new(0, 0, win_w, toolbar_h);
-                        toolbar_widget.size_allocate(&alloc);
-                        toolbar_widget.queue_resize();
-                        toolbar_widget.queue_draw();
                     } else {
                         toolbar_widget.hide();
                         toolbar_widget.set_vexpand(false);
@@ -145,7 +142,6 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                 });
 
                 // Tab webview widgets (children[1..N])
-                let content_h = (win_h - toolbar_h).max(0);
                 for (idx, widget) in children.iter().skip(1).enumerate() {
                     let is_active = Some(idx) == active_index;
                     if is_active {
@@ -154,10 +150,6 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                         widget.set_valign(gtk::Align::Fill);
                         widget.set_size_request(-1, -1);
                         gtk_box.set_child_packing(widget, true, true, 0, gtk::PackType::Start);
-                        let alloc = gdk::Rectangle::new(0, toolbar_h, win_w, content_h);
-                        widget.size_allocate(&alloc);
-                        widget.queue_resize();
-                        widget.queue_draw();
                     } else {
                         widget.hide();
                         widget.set_vexpand(false);
@@ -165,8 +157,6 @@ fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
                         gtk_box.set_child_packing(widget, false, false, 0, gtk::PackType::Start);
                     }
                 }
-                gtk_box.queue_resize();
-                gtk_box.queue_draw();
             }
         }
     }
@@ -268,9 +258,23 @@ fn create_tab(
         })();
     "#;
 
+    let handle_clone = app_handle.clone();
+    let tab_id_clone = new_tab_id.clone();
     let builder = WebviewBuilder::new(&new_tab_id, webview_url)
         .devtools(true)
-        .initialization_script(init_script);
+        .initialization_script(init_script)
+        .on_navigation(move |url| {
+            let url_str = url.to_string();
+            let st = handle_clone.state::<Arc<Mutex<AppState>>>();
+            let mut sg = st.lock().unwrap();
+            if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == tab_id_clone) {
+                if tab.url != url_str {
+                    tab.url = url_str;
+                    let _ = emit_tab_state(&handle_clone, &sg);
+                }
+            }
+            true
+        });
     let _ = main_window.add_child(
         builder,
         LogicalPosition::new(0.0, 0.0),
@@ -493,9 +497,6 @@ fn main() {
                         _ => {}
                     }
                 });
-
-                // NOTE: Do NOT use connect_size_allocate here — it fires during relayout
-                // while Ctrl+B already holds the AppState mutex, causing a deadlock.
             }
 
             // Capture Ctrl+B at GTK window level
