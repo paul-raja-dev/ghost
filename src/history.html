@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Browsing History</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      background-color: #07070c;
+      color: #e2e2f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title-icon {
+      font-size: 28px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    .clear-btn {
+      background: rgba(255, 85, 85, 0.1);
+      border: 1px solid rgba(255, 85, 85, 0.3);
+      color: #ff5555;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .clear-btn:hover {
+      background: rgba(255, 85, 85, 0.25);
+      border-color: #ff5555;
+      transform: translateY(-1px);
+    }
+
+    .search-box {
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      background: #11111c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px 18px 14px 44px;
+      color: #f0f0ff;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: #39ff14;
+      box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.12);
+      background: #161625;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #707090;
+      font-size: 16px;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .history-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #11111c;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 14px 18px;
+      transition: all 0.2s ease;
+    }
+
+    .history-card:hover {
+      border-color: rgba(57, 255, 20, 0.3);
+      background: #161626;
+      transform: translateX(4px);
+    }
+
+    .card-main {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+      padding-right: 16px;
+    }
+
+    .card-title {
+      font-weight: 500;
+      font-size: 15px;
+      color: #ffffff;
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-title:hover {
+      color: #39ff14;
+    }
+
+    .card-url {
+      font-size: 13px;
+      color: #7878a0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-decoration: none;
+    }
+
+    .card-url:hover {
+      text-decoration: underline;
+    }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .card-time {
+      font-size: 12px;
+      color: #555577;
+    }
+
+    .delete-item-btn {
+      background: transparent;
+      border: none;
+      color: #555577;
+      font-size: 16px;
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .delete-item-btn:hover {
+      background: rgba(255, 85, 85, 0.15);
+      color: #ff5555;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 0;
+      color: #666688;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-group">
+        <span class="title-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39ff14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </span>
+        <h1>Browsing History</h1>
+      </div>
+      <button class="clear-btn" id="clear-all-btn">Clear All History</button>
+    </div>
+
+    <div class="search-box">
+      <span class="search-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </span>
+      <input type="text" class="search-input" id="search-input" placeholder="Search browsing history…" autocomplete="off" />
+    </div>
+
+    <div class="history-list" id="history-list">
+      <div class="empty-state">Loading history…</div>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const historyList = document.getElementById('history-list');
+    const searchInput = document.getElementById('search-input');
+    const clearAllBtn = document.getElementById('clear-all-btn');
+
+    let allHistory = [];
+
+    function formatTime(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' · ' + date.toLocaleDateString();
+    }
+
+    function renderHistory(items) {
+      historyList.innerHTML = '';
+      if (!items || items.length === 0) {
+        historyList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div>No history found</div>
+          </div>
+        `;
+        return;
+      }
+
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+
+        const cardMain = document.createElement('div');
+        cardMain.className = 'card-main';
+
+        const title = document.createElement('a');
+        title.className = 'card-title';
+        title.textContent = item.title || item.url;
+        title.href = item.url;
+        title.addEventListener('click', (e) => {
+          e.preventDefault();
+          invoke('navigate', { url: item.url });
+        });
+
+        const url = document.createElement('a');
+        url.className = 'card-url';
+        url.textContent = item.url;
+        url.href = item.url;
+        url.addEventListener('click', (e) => {
+          e.preventDefault();
+          invoke('navigate', { url: item.url });
+        });
+
+        cardMain.appendChild(title);
+        cardMain.appendChild(url);
+
+        const meta = document.createElement('div');
+        meta.className = 'card-meta';
+
+        const time = document.createElement('span');
+        time.className = 'card-time';
+        time.textContent = formatTime(item.timestamp);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-item-btn';
+        delBtn.textContent = '×';
+        delBtn.title = 'Remove from history';
+        delBtn.addEventListener('click', () => {
+          invoke('remove_history_entry', { id: item.id })
+            .then(() => loadHistory())
+            .catch(console.error);
+        });
+
+        meta.appendChild(time);
+        meta.appendChild(delBtn);
+
+        card.appendChild(cardMain);
+        card.appendChild(meta);
+
+        historyList.appendChild(card);
+      });
+    }
+
+    function loadHistory() {
+      invoke('get_history')
+        .then(entries => {
+          allHistory = entries || [];
+          filterHistory();
+        })
+        .catch(err => {
+          console.error(err);
+          historyList.innerHTML = '<div class="empty-state">Failed to load history</div>';
+        });
+    }
+
+    function filterHistory() {
+      const q = searchInput.value.trim().toLowerCase();
+      if (!q) {
+        renderHistory(allHistory);
+        return;
+      }
+      const filtered = allHistory.filter(item =>
+        (item.title && item.title.toLowerCase().includes(q)) ||
+        (item.url && item.url.toLowerCase().includes(q))
+      );
+      renderHistory(filtered);
+    }
+
+    searchInput.addEventListener('input', filterHistory);
+
+    clearAllBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to clear all browsing history?')) {
+        invoke('clear_history')
+          .then(() => loadHistory())
+          .catch(console.error);
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', loadHistory);
+  </script>
+</body>
+</html>

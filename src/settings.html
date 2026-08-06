@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      background-color: #07070c;
+      color: #e2e2f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+    }
+
+    .title-icon {
+      font-size: 28px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    .settings-group {
+      background: #11111c;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .group-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #39ff14;
+      margin: 0 0 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .setting-info {
+      flex: 1;
+    }
+
+    .setting-label {
+      font-weight: 500;
+      font-size: 15px;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+
+    .setting-desc {
+      font-size: 13px;
+      color: #7878a0;
+    }
+
+    select, input[type="text"], input[type="number"] {
+      background: #181828;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #ffffff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input[type="text"]:focus, input[type="number"]:focus {
+      border-color: #39ff14;
+    }
+
+    /* Switch toggle */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #242436;
+      transition: .25s;
+      border-radius: 34px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #9595b8;
+      transition: .25s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: rgba(57, 255, 20, 0.2);
+      border-color: #39ff14;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+      background-color: #39ff14;
+      box-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .save-btn {
+      background: #39ff14;
+      color: #07070c;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 28px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .save-btn:hover {
+      background: #50ff30;
+      transform: translateY(-1px);
+      box-shadow: 0 0 16px rgba(57, 255, 20, 0.4);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: #181828;
+      border: 1px solid #39ff14;
+      color: #39ff14;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-weight: 500;
+      font-size: 14px;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      z-index: 99;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="title-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39ff14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </span>
+      <h1>Settings</h1>
+    </div>
+
+    <form id="settings-form">
+      <div class="settings-group">
+        <div class="group-title">Search Engine</div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">Default Search Engine</div>
+            <div class="setting-desc">Choose the search engine used for address bar queries</div>
+          </div>
+          <select id="search-preset">
+            <option value="https://www.google.com/search?q=">Google</option>
+            <option value="https://duckduckgo.com/?q=">DuckDuckGo</option>
+            <option value="https://www.bing.com/search?q=">Bing</option>
+            <option value="https://search.brave.com/search?q=">Brave Search</option>
+            <option value="custom">Custom URL Template</option>
+          </select>
+        </div>
+
+        <div class="setting-item" id="custom-engine-item" style="display:none;">
+          <div class="setting-info">
+            <div class="setting-label">Custom Search Base URL</div>
+            <div class="setting-desc">Use %s or ending = for search term insertion</div>
+          </div>
+          <input type="text" id="custom-engine-url" placeholder="https://example.com/search?q=" style="width: 260px;" />
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="group-title">Startup & Sessions</div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">Restore Previous Session</div>
+            <div class="setting-desc">Reopen tabs from your last browsing session when starting Ghost</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="restore-session-toggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="group-title">History & Storage</div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">Maximum History Entries</div>
+            <div class="setting-desc">Limit maximum number of browsing history records kept</div>
+          </div>
+          <input type="number" id="max-history-input" min="100" max="100000" step="500" value="10000" style="width: 120px;" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="save-btn">Save Settings</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast">✓ Settings saved successfully!</div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const form = document.getElementById('settings-form');
+    const searchPreset = document.getElementById('search-preset');
+    const customEngineItem = document.getElementById('custom-engine-item');
+    const customEngineUrl = document.getElementById('custom-engine-url');
+    const restoreSessionToggle = document.getElementById('restore-session-toggle');
+    const maxHistoryInput = document.getElementById('max-history-input');
+    const toast = document.getElementById('toast');
+
+    let currentSettings = {};
+
+    function updateCustomVisibility() {
+      if (searchPreset.value === 'custom') {
+        customEngineItem.style.display = 'flex';
+      } else {
+        customEngineItem.style.display = 'none';
+      }
+    }
+
+    searchPreset.addEventListener('change', updateCustomVisibility);
+
+    function loadSettings() {
+      invoke('get_settings')
+        .then(settings => {
+          currentSettings = settings || {};
+          const se = currentSettings.search_engine || 'https://www.google.com/search?q=';
+          if (['https://www.google.com/search?q=', 'https://duckduckgo.com/?q=', 'https://www.bing.com/search?q=', 'https://search.brave.com/search?q='].includes(se)) {
+            searchPreset.value = se;
+          } else {
+            searchPreset.value = 'custom';
+            customEngineUrl.value = se;
+          }
+          updateCustomVisibility();
+
+          restoreSessionToggle.checked = !!currentSettings.restore_session;
+          maxHistoryInput.value = currentSettings.max_history_items || 10000;
+        })
+        .catch(console.error);
+    }
+
+    function showToast() {
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 2500);
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      let engine = searchPreset.value;
+      if (engine === 'custom') {
+        engine = customEngineUrl.value.trim() || 'https://www.google.com/search?q=';
+      }
+
+      const updated = {
+        search_engine: engine,
+        homepage: 'newtab.html',
+        theme: 'dark',
+        restore_session: restoreSessionToggle.checked,
+        max_history_items: parseInt(maxHistoryInput.value) || 10000,
+      };
+
+      invoke('update_settings', { settings: updated })
+        .then(() => {
+          showToast();
+        })
+        .catch(console.error);
+    });
+
+    window.addEventListener('DOMContentLoaded', loadSettings);
+  </script>
+</body>
+</html>

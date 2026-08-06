@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bookmarks Manager</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      background-color: #07070c;
+      color: #e2e2f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title-icon {
+      font-size: 28px;
+      color: #ffd700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    .add-box {
+      background: #11111c;
+      border: 1px solid rgba(255, 215, 0, 0.15);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 28px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .add-input {
+      flex: 1;
+      min-width: 200px;
+      background: #181828;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #ffffff;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .add-input:focus {
+      border-color: #ffd700;
+    }
+
+    .add-btn {
+      background: #ffd700;
+      color: #07070c;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .add-btn:hover {
+      background: #ffe240;
+      transform: translateY(-1px);
+    }
+
+    .search-box {
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      background: #11111c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px 18px 14px 44px;
+      color: #f0f0ff;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: #ffd700;
+      box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.12);
+      background: #161625;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #707090;
+      font-size: 16px;
+    }
+
+    .bookmarks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .bookmark-card {
+      background: #11111c;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .bookmark-card:hover {
+      border-color: rgba(255, 215, 0, 0.4);
+      background: #161626;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .card-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 215, 0, 0.1);
+      color: #ffd700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .card-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .card-title {
+      font-weight: 600;
+      font-size: 15px;
+      color: #ffffff;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-decoration: none;
+      display: block;
+    }
+
+    .card-title:hover {
+      color: #ffd700;
+    }
+
+    .card-url {
+      font-size: 12px;
+      color: #7878a0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-decoration: none;
+      display: block;
+    }
+
+    .card-url:hover {
+      text-decoration: underline;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 12px;
+      margin-top: 8px;
+    }
+
+    .card-date {
+      font-size: 11px;
+      color: #555577;
+    }
+
+    .delete-bm-btn {
+      background: transparent;
+      border: none;
+      color: #555577;
+      font-size: 16px;
+      cursor: pointer;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .delete-bm-btn:hover {
+      background: rgba(255, 85, 85, 0.15);
+      color: #ff5555;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 0;
+      color: #666688;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-group">
+        <span class="title-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        </span>
+        <h1>Bookmarks Manager</h1>
+      </div>
+    </div>
+
+    <form class="add-box" id="add-form">
+      <input type="text" class="add-input" id="new-url" placeholder="URL (e.g. github.com)" required />
+      <input type="text" class="add-input" id="new-title" placeholder="Title (optional)" />
+      <button type="submit" class="add-btn">+ Add Bookmark</button>
+    </form>
+
+    <div class="search-box">
+      <span class="search-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </span>
+      <input type="text" class="search-input" id="search-input" placeholder="Search bookmarks…" autocomplete="off" />
+    </div>
+
+    <div class="bookmarks-grid" id="bookmarks-grid">
+      <div class="empty-state">Loading bookmarks…</div>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const grid = document.getElementById('bookmarks-grid');
+    const searchInput = document.getElementById('search-input');
+    const addForm = document.getElementById('add-form');
+    const newUrl = document.getElementById('new-url');
+    const newTitle = document.getElementById('new-title');
+
+    let allBookmarks = [];
+
+    function getDomainInitial(url) {
+      try {
+        const u = new URL(url.startsWith('http') ? url : 'https://' + url);
+        return u.hostname.replace('www.', '')[0].toUpperCase();
+      } catch (e) {
+        return 'B';
+      }
+    }
+
+    function formatDate(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleDateString();
+    }
+
+    function renderBookmarks(items) {
+      grid.innerHTML = '';
+      if (!items || items.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            </div>
+            <div>No bookmarks saved yet</div>
+          </div>
+        `;
+        return;
+      }
+
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bookmark-card';
+
+        const top = document.createElement('div');
+        top.className = 'card-top';
+
+        const badge = document.createElement('div');
+        badge.className = 'card-badge';
+        badge.textContent = getDomainInitial(item.url);
+
+        const details = document.createElement('div');
+        details.className = 'card-details';
+
+        const title = document.createElement('a');
+        title.className = 'card-title';
+        title.textContent = item.title || item.url;
+        title.href = item.url;
+        title.addEventListener('click', (e) => {
+          e.preventDefault();
+          invoke('navigate', { url: item.url });
+        });
+
+        const url = document.createElement('a');
+        url.className = 'card-url';
+        url.textContent = item.url;
+        url.href = item.url;
+        url.addEventListener('click', (e) => {
+          e.preventDefault();
+          invoke('navigate', { url: item.url });
+        });
+
+        details.appendChild(title);
+        details.appendChild(url);
+
+        top.appendChild(badge);
+        top.appendChild(details);
+
+        const footer = document.createElement('div');
+        footer.className = 'card-footer';
+
+        const date = document.createElement('span');
+        date.className = 'card-date';
+        date.textContent = formatDate(item.created_at);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-bm-btn';
+        delBtn.textContent = '×';
+        delBtn.title = 'Delete bookmark';
+        delBtn.addEventListener('click', () => {
+          invoke('remove_bookmark', { id: item.id })
+            .then(() => loadBookmarks())
+            .catch(console.error);
+        });
+
+        footer.appendChild(date);
+        footer.appendChild(delBtn);
+
+        card.appendChild(top);
+        card.appendChild(footer);
+
+        grid.appendChild(card);
+      });
+    }
+
+    function loadBookmarks() {
+      invoke('get_bookmarks')
+        .then(entries => {
+          allBookmarks = entries || [];
+          filterBookmarks();
+        })
+        .catch(err => {
+          console.error(err);
+          grid.innerHTML = '<div class="empty-state">Failed to load bookmarks</div>';
+        });
+    }
+
+    function filterBookmarks() {
+      const q = searchInput.value.trim().toLowerCase();
+      if (!q) {
+        renderBookmarks(allBookmarks);
+        return;
+      }
+      const filtered = allBookmarks.filter(item =>
+        (item.title && item.title.toLowerCase().includes(q)) ||
+        (item.url && item.url.toLowerCase().includes(q))
+      );
+      renderBookmarks(filtered);
+    }
+
+    addForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const u = newUrl.value.trim();
+      const t = newTitle.value.trim();
+      if (u) {
+        invoke('add_bookmark', { url: u, title: t, folder: null })
+          .then(() => {
+            newUrl.value = '';
+            newTitle.value = '';
+            loadBookmarks();
+          })
+          .catch(console.error);
+      }
+    });
+
+    searchInput.addEventListener('input', filterBookmarks);
+
+    window.addEventListener('DOMContentLoaded', loadBookmarks);
+  </script>
+</body>
+</html>

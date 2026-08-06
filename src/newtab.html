@@ -16,18 +16,27 @@
       color: #39ff14;
       font-family: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Code', 'Fira Code', Consolas, monospace;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       user-select: none;
       overflow: hidden;
     }
 
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      width: 90%;
+      max-width: 620px;
+    }
+
     .terminal-prompt {
       display: flex;
       align-items: center;
       gap: 12px;
-      width: 90%;
-      max-width: 600px;
+      width: 100%;
       background: transparent;
       border: none;
       padding: 0;
@@ -38,7 +47,7 @@
     .prompt-label {
       color: #7878a0;
       font-weight: 500;
-      font-size: 1.25rem;
+      font-size: 1.35rem;
       flex-shrink: 0;
       letter-spacing: 0.05em;
     }
@@ -49,7 +58,7 @@
       border: none;
       color: #39ff14;
       font-family: inherit;
-      font-size: 1.25rem;
+      font-size: 1.35rem;
       font-weight: 500;
       outline: none;
       caret-color: #39ff14;
@@ -61,12 +70,61 @@
     #cli-input::placeholder {
       color: #2a2a40;
     }
+
+    .quick-chips {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #11111c;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #9595b8;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .chip:hover {
+      background: #18182a;
+      border-color: #39ff14;
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .chip-icon {
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <div class="terminal-prompt" id="prompt-box">
-    <span class="prompt-label">ghost >></span>
-    <input id="cli-input" type="text" autofocus autocomplete="off" spellcheck="false" />
+  <div class="wrapper">
+    <div class="terminal-prompt" id="prompt-box">
+      <span class="prompt-label">ghost >></span>
+      <input id="cli-input" type="text" autofocus autocomplete="off" spellcheck="false" placeholder="Search or type address / command…" />
+    </div>
+
+    <div class="quick-chips">
+      <div class="chip" id="chip-history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span>History</span>
+      </div>
+      <div class="chip" id="chip-bookmarks">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        <span>Bookmarks</span>
+      </div>
+      <div class="chip" id="chip-settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Settings</span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -83,13 +141,25 @@
     setTimeout(focusInput, 50);
 
     promptBox.addEventListener('click', focusInput);
-    document.body.addEventListener('click', focusInput);
+
+    document.getElementById('chip-history').addEventListener('click', () => invoke('navigate', { url: 'history.html' }));
+    document.getElementById('chip-bookmarks').addEventListener('click', () => invoke('navigate', { url: 'bookmarks.html' }));
+    document.getElementById('chip-settings').addEventListener('click', () => invoke('navigate', { url: 'settings.html' }));
 
     cliInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const query = cliInput.value.trim();
         if (query) {
-          invoke('navigate', { url: query }).catch(console.error);
+          const lower = query.toLowerCase();
+          if (lower === 'history' || lower === 'h') {
+            invoke('navigate', { url: 'history.html' }).catch(console.error);
+          } else if (lower === 'bookmarks' || lower === 'b') {
+            invoke('navigate', { url: 'bookmarks.html' }).catch(console.error);
+          } else if (lower === 'settings' || lower === 's') {
+            invoke('navigate', { url: 'settings.html' }).catch(console.error);
+          } else {
+            invoke('navigate', { url: query }).catch(console.error);
+          }
         }
       }
     });

@@ -17,12 +17,54 @@ pub struct TabInfo {
     pub url: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BookmarkEntry {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub folder: Option<String>,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSettings {
+    pub search_engine: String,
+    pub homepage: String,
+    pub theme: String,
+    pub restore_session: bool,
+    pub max_history_items: usize,
+}
+
+impl Default for UserSettings {
+    fn default() -> Self {
+        Self {
+            search_engine: "https://www.google.com/search?q=".to_string(),
+            homepage: "newtab.html".to_string(),
+            theme: "dark".to_string(),
+            restore_session: true,
+            max_history_items: 10000,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct AppState {
     pub tabs: Vec<TabInfo>,
     pub active_id: Option<String>,
     pub next_tab_num: usize,
     pub toolbar_visible: bool,
+    pub closed_tabs_stack: Vec<String>,
+    pub history: Vec<HistoryEntry>,
+    pub bookmarks: Vec<BookmarkEntry>,
+    pub settings: UserSettings,
 }
 
 impl Default for AppState {
@@ -32,6 +74,10 @@ impl Default for AppState {
             active_id: None,
             next_tab_num: 0,
             toolbar_visible: true,
+            closed_tabs_stack: Vec::new(),
+            history: Vec::new(),
+            bookmarks: Vec::new(),
+            settings: UserSettings::default(),
         }
     }
 }
@@ -42,7 +88,111 @@ pub struct TabStatePayload {
     pub active_id: Option<String>,
 }
 
-fn resolve_input(input: &str) -> Result<String, String> {
+fn get_app_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
+    if let Ok(dir) = app_handle.path().app_config_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    } else {
+        std::path::PathBuf::from(".")
+    }
+}
+
+fn get_session_file_path(app_handle: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    Some(get_app_dir(app_handle).join("session.json"))
+}
+
+fn load_history(app_handle: &tauri::AppHandle) -> Vec<HistoryEntry> {
+    let path = get_app_dir(app_handle).join("history.json");
+    if path.exists() {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Ok(entries) = serde_json::from_str::<Vec<HistoryEntry>>(&content) {
+                return entries;
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn save_history(app_handle: &tauri::AppHandle, history: &[HistoryEntry]) {
+    let path = get_app_dir(app_handle).join("history.json");
+    if let Ok(content) = serde_json::to_string_pretty(history) {
+        let _ = std::fs::write(path, content);
+    }
+}
+
+fn load_bookmarks(app_handle: &tauri::AppHandle) -> Vec<BookmarkEntry> {
+    let path = get_app_dir(app_handle).join("bookmarks.json");
+    if path.exists() {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Ok(entries) = serde_json::from_str::<Vec<BookmarkEntry>>(&content) {
+                return entries;
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn save_bookmarks(app_handle: &tauri::AppHandle, bookmarks: &[BookmarkEntry]) {
+    let path = get_app_dir(app_handle).join("bookmarks.json");
+    if let Ok(content) = serde_json::to_string_pretty(bookmarks) {
+        let _ = std::fs::write(path, content);
+    }
+}
+
+fn load_settings(app_handle: &tauri::AppHandle) -> UserSettings {
+    let path = get_app_dir(app_handle).join("settings.json");
+    if path.exists() {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Ok(settings) = serde_json::from_str::<UserSettings>(&content) {
+                return settings;
+            }
+        }
+    }
+    UserSettings::default()
+}
+
+fn save_settings(app_handle: &tauri::AppHandle, settings: &UserSettings) {
+    let path = get_app_dir(app_handle).join("settings.json");
+    if let Ok(content) = serde_json::to_string_pretty(settings) {
+        let _ = std::fs::write(path, content);
+    }
+}
+
+fn record_history_visit(app_handle: &tauri::AppHandle, state: &Arc<Mutex<AppState>>, url: &str, title: &str) {
+    if url.is_empty() || is_newtab_url(url) {
+        return;
+    }
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let entry = HistoryEntry {
+        id: format!("{}-{}", timestamp, state.lock().unwrap().history.len() + 1),
+        url: url.to_string(),
+        title: if title.is_empty() { url.to_string() } else { title.to_string() },
+        timestamp,
+    };
+
+    let updated_history = {
+        let mut sg = state.lock().unwrap();
+        if let Some(last) = sg.history.first() {
+            if last.url == url && (timestamp - last.timestamp) < 5 {
+                return;
+            }
+        }
+        sg.history.insert(0, entry);
+        let max_items = sg.settings.max_history_items;
+        if sg.history.len() > max_items {
+            sg.history.truncate(max_items);
+        }
+        sg.history.clone()
+    };
+
+    save_history(app_handle, &updated_history);
+}
+
+fn resolve_input_with_engine(input: &str, search_engine_base: &str) -> Result<String, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err("Empty input".to_string());
@@ -64,15 +214,21 @@ fn resolve_input(input: &str) -> Result<String, String> {
     }
     let mut serializer = url::form_urlencoded::Serializer::new(String::new());
     serializer.append_pair("q", trimmed);
-    Ok(format!("https://www.google.com/search?{}", serializer.finish()))
+    let query_str = serializer.finish();
+    let q_val = query_str.replace("q=", "");
+    if search_engine_base.contains("%s") {
+        Ok(search_engine_base.replace("%s", &q_val))
+    } else if search_engine_base.ends_with('=') || search_engine_base.ends_with('?') {
+        Ok(format!("{}{}", search_engine_base, q_val))
+    } else if search_engine_base.contains('?') {
+        Ok(format!("{}&{}", search_engine_base, query_str))
+    } else {
+        Ok(format!("{}?{}", search_engine_base, query_str))
+    }
 }
 
-fn get_session_file_path(app_handle: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    if let Ok(dir) = app_handle.path().app_config_dir() {
-        let _ = std::fs::create_dir_all(&dir);
-        return Some(dir.join("session.json"));
-    }
-    None
+fn resolve_input(input: &str) -> Result<String, String> {
+    resolve_input_with_engine(input, "https://www.google.com/search?q=")
 }
 
 fn save_session(app_handle: &tauri::AppHandle, state: &AppState) {
@@ -99,8 +255,15 @@ fn emit_tab_state(app_handle: &tauri::AppHandle, state: &AppState) -> Result<(),
     Ok(())
 }
 
-fn is_newtab_url(url: &str) -> bool {
+fn is_internal_url(url: &str) -> bool {
     url == "newtab.html" || url.contains("newtab.html")
+        || url == "history.html" || url.contains("history.html")
+        || url == "bookmarks.html" || url.contains("bookmarks.html")
+        || url == "settings.html" || url.contains("settings.html")
+}
+
+fn is_newtab_url(url: &str) -> bool {
+    is_internal_url(url)
 }
 
 fn relayout(app_handle: &tauri::AppHandle, state: &AppState) {
@@ -210,6 +373,15 @@ fn hide_toolbar(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppStat
 }
 
 #[tauri::command]
+fn focus_urlbar(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let mut sg = state.lock().unwrap();
+    sg.toolbar_visible = true;
+    let _ = app_handle.emit_to("main", "toolbar-shown", ());
+    relayout(&app_handle, &sg);
+    Ok(())
+}
+
+#[tauri::command]
 fn create_tab(
     app_handle: tauri::AppHandle,
     state: State<'_, Arc<Mutex<AppState>>>,
@@ -217,9 +389,21 @@ fn create_tab(
 ) -> Result<String, String> {
     let (target_url, webview_url) = match url {
         Some(ref u) if !u.trim().is_empty() => {
-            let resolved = resolve_input(u)?;
-            let parsed: Url = resolved.parse().map_err(|e: url::ParseError| e.to_string())?;
-            (resolved, WebviewUrl::External(parsed))
+            let lower = u.trim().to_lowercase();
+            if lower == "history.html" || lower.ends_with("/history.html") {
+                ("history.html".to_string(), WebviewUrl::App("history.html".into()))
+            } else if lower == "bookmarks.html" || lower.ends_with("/bookmarks.html") {
+                ("bookmarks.html".to_string(), WebviewUrl::App("bookmarks.html".into()))
+            } else if lower == "settings.html" || lower.ends_with("/settings.html") {
+                ("settings.html".to_string(), WebviewUrl::App("settings.html".into()))
+            } else if lower == "newtab.html" || lower.ends_with("/newtab.html") {
+                ("newtab.html".to_string(), WebviewUrl::App("newtab.html".into()))
+            } else {
+                let engine = state.lock().unwrap().settings.search_engine.clone();
+                let resolved = resolve_input_with_engine(u, &engine)?;
+                let parsed: Url = resolved.parse().map_err(|e: url::ParseError| e.to_string())?;
+                (resolved, WebviewUrl::External(parsed))
+            }
         }
         _ => ("newtab.html".to_string(), WebviewUrl::App("newtab.html".into())),
     };
@@ -240,19 +424,48 @@ fn create_tab(
     let init_script = r#"
         (function() {
             window.addEventListener('keydown', function(e) {
+                var ctrl = e.ctrlKey || e.metaKey;
+                var shift = e.shiftKey;
+                var alt = e.altKey;
                 var key = e.key ? e.key.toLowerCase() : '';
-                if ((e.ctrlKey || e.metaKey) && (key === 'b' || key === 'l')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (window.__TAURI__ && window.__TAURI__.core) {
-                        window.__TAURI__.core.invoke('toggle_toolbar').catch(function(){});
-                    }
-                } else if ((e.ctrlKey || e.metaKey) && key === 't') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (window.__TAURI__ && window.__TAURI__.core) {
-                        window.__TAURI__.core.invoke('create_tab', { url: null }).catch(function(){});
-                    }
+
+                if (ctrl && !shift && key === 't') {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('create_tab', { url: null }).catch(function(){});
+                } else if (ctrl && shift && key === 't') {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('reopen_closed_tab').catch(function(){});
+                } else if ((ctrl && !shift && key === 'w') || (ctrl && e.key === 'F4')) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('close_active_tab').catch(function(){});
+                } else if ((ctrl && shift && key === 'tab') || (ctrl && e.key === 'PageUp')) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('prev_tab').catch(function(){});
+                } else if ((ctrl && !shift && key === 'tab') || (ctrl && e.key === 'PageDown')) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('next_tab').catch(function(){});
+                } else if (ctrl && !shift && key >= '1' && key <= '8') {
+                    e.preventDefault(); e.stopPropagation();
+                    var idx = parseInt(key) - 1;
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('switch_tab_by_index', { index: idx }).catch(function(){});
+                } else if (ctrl && !shift && key === '9') {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('switch_tab_by_index', { index: 999 }).catch(function(){});
+                } else if ((ctrl && !shift && (key === 'l' || key === 'b')) || (alt && key === 'd') || e.key === 'F6') {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('focus_urlbar').catch(function(){});
+                } else if ((ctrl && key === 'r') || e.key === 'F5') {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('reload').catch(function(){});
+                } else if (alt && (key === 'arrowleft' || key === 'left')) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('go_back').catch(function(){});
+                } else if (alt && (key === 'arrowright' || key === 'right')) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('go_forward').catch(function(){});
+                } else if (e.key === 'F12' || (ctrl && shift && key === 'i')) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (window.__TAURI__ && window.__TAURI__.core) window.__TAURI__.core.invoke('toggle_devtools').catch(function(){});
                 }
             }, true);
         })();
@@ -266,12 +479,17 @@ fn create_tab(
         .on_navigation(move |url| {
             let url_str = url.to_string();
             let st = handle_clone.state::<Arc<Mutex<AppState>>>();
-            let mut sg = st.lock().unwrap();
-            if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == tab_id_clone) {
-                if tab.url != url_str {
-                    tab.url = url_str;
-                    let _ = emit_tab_state(&handle_clone, &sg);
+            {
+                let mut sg = st.lock().unwrap();
+                if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == tab_id_clone) {
+                    if tab.url != url_str {
+                        tab.url = url_str.clone();
+                        let _ = emit_tab_state(&handle_clone, &sg);
+                    }
                 }
+            }
+            if !is_newtab_url(&url_str) {
+                record_history_visit(&handle_clone, &st, &url_str, "");
             }
             true
         });
@@ -291,15 +509,26 @@ fn create_tab(
         if let Some(new_wv) = app_handle.get_webview(&new_tab_id) {
             let _ = new_wv.show();
         }
+        let friendly_title = match target_url.as_str() {
+            "newtab.html" => "New Tab".to_string(),
+            "history.html" => "History".to_string(),
+            "bookmarks.html" => "Bookmarks".to_string(),
+            "settings.html" => "Settings".to_string(),
+            _ => format!("Tab {}", new_tab_num),
+        };
         sg.tabs.push(TabInfo {
             id: new_tab_id.clone(),
-            title: if target_url == "newtab.html" { "New Tab".to_string() } else { format!("Tab {}", new_tab_num) },
+            title: friendly_title,
             url: target_url.clone(),
         });
         sg.active_id = Some(new_tab_id.clone());
         sg.toolbar_visible = true;
         emit_tab_state(&app_handle, &sg)?;
         relayout(&app_handle, &sg);
+    }
+
+    if !is_newtab_url(&target_url) {
+        record_history_visit(&app_handle, state.inner(), &target_url, "");
     }
     Ok(new_tab_id)
 }
@@ -330,6 +559,10 @@ fn close_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>
     println!("[GHOST DEBUG] close_tab: id={}", tab_id);
     let mut sg = state.lock().unwrap();
     let pos = sg.tabs.iter().position(|t| t.id == tab_id).ok_or("Tab not found")?;
+    let closed_url = sg.tabs[pos].url.clone();
+    if !closed_url.is_empty() && !is_newtab_url(&closed_url) {
+        sg.closed_tabs_stack.push(closed_url);
+    }
     if let Some(wv) = app_handle.get_webview(&tab_id) { let _ = wv.close(); }
     sg.tabs.remove(pos);
     if sg.active_id.as_deref() == Some(&tab_id) {
@@ -346,6 +579,80 @@ fn close_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>
     }
     emit_tab_state(&app_handle, &sg)?;
     relayout(&app_handle, &sg);
+    Ok(())
+}
+
+#[tauri::command]
+fn close_active_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let active_id = state.lock().unwrap().active_id.clone();
+    if let Some(id) = active_id {
+        close_tab(app_handle, state, id)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn next_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let next_id = {
+        let sg = state.lock().unwrap();
+        if sg.tabs.len() <= 1 {
+            return Ok(());
+        }
+        let pos = sg.tabs.iter().position(|t| Some(&t.id) == sg.active_id.as_ref()).unwrap_or(0);
+        let next_pos = (pos + 1) % sg.tabs.len();
+        sg.tabs[next_pos].id.clone()
+    };
+    switch_tab(app_handle, state, next_id)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn prev_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let prev_id = {
+        let sg = state.lock().unwrap();
+        if sg.tabs.len() <= 1 {
+            return Ok(());
+        }
+        let pos = sg.tabs.iter().position(|t| Some(&t.id) == sg.active_id.as_ref()).unwrap_or(0);
+        let prev_pos = if pos == 0 { sg.tabs.len() - 1 } else { pos - 1 };
+        sg.tabs[prev_pos].id.clone()
+    };
+    switch_tab(app_handle, state, prev_id)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn switch_tab_by_index(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, index: usize) -> Result<(), String> {
+    let target_id = {
+        let sg = state.lock().unwrap();
+        if sg.tabs.is_empty() {
+            return Ok(());
+        }
+        if index == 999 {
+            sg.tabs.last().map(|t| t.id.clone())
+        } else if index < sg.tabs.len() {
+            Some(sg.tabs[index].id.clone())
+        } else {
+            None
+        }
+    };
+    if let Some(id) = target_id {
+        switch_tab(app_handle, state, id)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn reopen_closed_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let last_url = {
+        let mut sg = state.lock().unwrap();
+        sg.closed_tabs_stack.pop()
+    };
+    if let Some(url) = last_url {
+        create_tab(app_handle, state, Some(url))?;
+    } else {
+        create_tab(app_handle, state, None)?;
+    }
     Ok(())
 }
 
@@ -387,8 +694,21 @@ fn navigate(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>
 
 #[tauri::command]
 fn update_tab_title(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, tab_id: String, title: String) -> Result<(), String> {
-    let mut sg = state.lock().unwrap();
-    if let Some(tab) = sg.tabs.iter_mut().find(|t| t.id == tab_id) { tab.title = title; }
+    let history_to_save = {
+        let mut sg = state.lock().unwrap();
+        let target_url = sg.tabs.iter_mut().find(|t| t.id == tab_id).map(|t| {
+            t.title = title.clone();
+            t.url.clone()
+        });
+        if let Some(url) = target_url {
+            if let Some(entry) = sg.history.iter_mut().find(|h| h.url == url) {
+                entry.title = title;
+            }
+        }
+        sg.history.clone()
+    };
+    save_history(&app_handle, &history_to_save);
+    let sg = state.lock().unwrap();
     emit_tab_state(&app_handle, &sg)?;
     Ok(())
 }
@@ -418,6 +738,160 @@ fn go_forward(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>
 fn reload(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
     let id = state.lock().unwrap().active_id.clone().ok_or("No active tab")?;
     app_handle.get_webview(&id).ok_or("Not found")?.eval("location.reload()").map_err(|e| e.to_string())
+}
+
+// --- History Commands ---
+
+#[tauri::command]
+fn get_history(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<HistoryEntry>, String> {
+    let sg = state.lock().unwrap();
+    Ok(sg.history.clone())
+}
+
+#[tauri::command]
+fn clear_history(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    {
+        let mut sg = state.lock().unwrap();
+        sg.history.clear();
+    }
+    save_history(&app_handle, &[]);
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_history_entry(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, id: String) -> Result<(), String> {
+    let updated = {
+        let mut sg = state.lock().unwrap();
+        sg.history.retain(|h| h.id != id);
+        sg.history.clone()
+    };
+    save_history(&app_handle, &updated);
+    Ok(())
+}
+
+#[tauri::command]
+fn search_history(state: State<'_, Arc<Mutex<AppState>>>, query: String) -> Result<Vec<HistoryEntry>, String> {
+    let q = query.to_lowercase();
+    let sg = state.lock().unwrap();
+    let matches = sg.history.iter()
+        .filter(|h| h.url.to_lowercase().contains(&q) || h.title.to_lowercase().contains(&q))
+        .cloned()
+        .collect();
+    Ok(matches)
+}
+
+// --- Bookmarks Commands ---
+
+#[tauri::command]
+fn get_bookmarks(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<BookmarkEntry>, String> {
+    let sg = state.lock().unwrap();
+    Ok(sg.bookmarks.clone())
+}
+
+#[tauri::command]
+fn add_bookmark(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<Mutex<AppState>>>,
+    url: String,
+    title: String,
+    folder: Option<String>,
+) -> Result<BookmarkEntry, String> {
+    if url.is_empty() || is_newtab_url(&url) {
+        return Err("Cannot bookmark empty or newtab URL".to_string());
+    }
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let entry = BookmarkEntry {
+        id: format!("bm-{}", timestamp),
+        url: url.clone(),
+        title: if title.is_empty() { url } else { title },
+        folder,
+        created_at: timestamp,
+    };
+
+    let updated = {
+        let mut sg = state.lock().unwrap();
+        if let Some(existing) = sg.bookmarks.iter().find(|b| b.url == entry.url) {
+            return Ok(existing.clone());
+        }
+        sg.bookmarks.push(entry.clone());
+        sg.bookmarks.clone()
+    };
+
+    save_bookmarks(&app_handle, &updated);
+    Ok(entry)
+}
+
+#[tauri::command]
+fn remove_bookmark(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>, id: String) -> Result<(), String> {
+    let updated = {
+        let mut sg = state.lock().unwrap();
+        sg.bookmarks.retain(|b| b.id != id && b.url != id);
+        sg.bookmarks.clone()
+    };
+    save_bookmarks(&app_handle, &updated);
+    Ok(())
+}
+
+#[tauri::command]
+fn is_bookmarked(state: State<'_, Arc<Mutex<AppState>>>, url: String) -> Result<bool, String> {
+    let sg = state.lock().unwrap();
+    Ok(sg.bookmarks.iter().any(|b| b.url == url))
+}
+
+#[tauri::command]
+fn toggle_bookmark_active_tab(app_handle: tauri::AppHandle, state: State<'_, Arc<Mutex<AppState>>>) -> Result<bool, String> {
+    let (active_url, active_title) = {
+        let sg = state.lock().unwrap();
+        let active_id = sg.active_id.as_ref();
+        let tab = active_id.and_then(|id| sg.tabs.iter().find(|t| &t.id == id));
+        match tab {
+            Some(t) => (t.url.clone(), t.title.clone()),
+            None => return Err("No active tab".to_string()),
+        }
+    };
+
+    if active_url.is_empty() || is_newtab_url(&active_url) {
+        return Ok(false);
+    }
+
+    let is_bm = {
+        let sg = state.lock().unwrap();
+        sg.bookmarks.iter().any(|b| b.url == active_url)
+    };
+
+    if is_bm {
+        remove_bookmark(app_handle, state, active_url)?;
+        Ok(false)
+    } else {
+        add_bookmark(app_handle, state, active_url, active_title, None)?;
+        Ok(true)
+    }
+}
+
+// --- Settings Commands ---
+
+#[tauri::command]
+fn get_settings(state: State<'_, Arc<Mutex<AppState>>>) -> Result<UserSettings, String> {
+    let sg = state.lock().unwrap();
+    Ok(sg.settings.clone())
+}
+
+#[tauri::command]
+fn update_settings(
+    app_handle: tauri::AppHandle,
+    state: State<'_, Arc<Mutex<AppState>>>,
+    settings: UserSettings,
+) -> Result<UserSettings, String> {
+    {
+        let mut sg = state.lock().unwrap();
+        sg.settings = settings.clone();
+    }
+    save_settings(&app_handle, &settings);
+    Ok(settings)
 }
 
 fn init_env_flags() {
@@ -464,18 +938,49 @@ fn main() {
         .manage(app_state.clone())
         .invoke_handler(tauri::generate_handler![
             navigate, go_back, go_forward, reload,
-            create_tab, switch_tab, close_tab,
-            update_tab_title, toggle_devtools,
-            toggle_toolbar, hide_toolbar
+            create_tab, switch_tab, close_tab, close_active_tab,
+            next_tab, prev_tab, switch_tab_by_index, reopen_closed_tab,
+            focus_urlbar, update_tab_title, toggle_devtools,
+            toggle_toolbar, hide_toolbar,
+            get_history, clear_history, remove_history_entry, search_history,
+            get_bookmarks, add_bookmark, remove_bookmark, is_bookmarked, toggle_bookmark_active_tab,
+            get_settings, update_settings
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-
             let state = app.state::<Arc<Mutex<AppState>>>();
-            if let Some(session_path) = get_session_file_path(&handle) {
-                let _ = std::fs::remove_file(session_path);
+
+            {
+                let mut sg = state.lock().unwrap();
+                sg.history = load_history(&handle);
+                sg.bookmarks = load_bookmarks(&handle);
+                sg.settings = load_settings(&handle);
             }
-            let _ = create_tab(handle.clone(), state, None);
+
+            let restore_enabled = state.lock().unwrap().settings.restore_session;
+            let mut session_restored = false;
+
+            if restore_enabled {
+                if let Some(session_path) = get_session_file_path(&handle) {
+                    if session_path.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&session_path) {
+                            if let Ok(payload) = serde_json::from_str::<TabStatePayload>(&content) {
+                                if !payload.tabs.is_empty() {
+                                    for tab in payload.tabs {
+                                        let url_arg = if is_newtab_url(&tab.url) { None } else { Some(tab.url) };
+                                        let _ = create_tab(handle.clone(), state.clone(), url_arg);
+                                    }
+                                    session_restored = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !session_restored {
+                let _ = create_tab(handle.clone(), state, None);
+            }
 
             // Listen for window resize to relayout
             if let Some(main_window) = app.get_window("main") {
