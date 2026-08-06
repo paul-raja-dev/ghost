@@ -63,7 +63,7 @@
     .group-title {
       font-size: 16px;
       font-weight: 600;
-      color: #39ff14;
+      color: #818cf8;
       margin: 0 0 4px 0;
       display: flex;
       align-items: center;
@@ -105,7 +105,7 @@
     }
 
     select:focus, input[type="text"]:focus, input[type="number"]:focus {
-      border-color: #39ff14;
+      border-color: #6366f1;
     }
 
     /* Switch toggle */
@@ -146,14 +146,14 @@
     }
 
     input:checked + .slider {
-      background-color: rgba(57, 255, 20, 0.2);
-      border-color: #39ff14;
+      background-color: rgba(99, 102, 241, 0.25);
+      border-color: #6366f1;
     }
 
     input:checked + .slider:before {
       transform: translateX(22px);
-      background-color: #39ff14;
-      box-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
+      background-color: #6366f1;
+      box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
     }
 
     .actions {
@@ -164,8 +164,8 @@
     }
 
     .save-btn {
-      background: #39ff14;
-      color: #07070c;
+      background: #6366f1;
+      color: #ffffff;
       border: none;
       border-radius: 10px;
       padding: 12px 28px;
@@ -176,9 +176,9 @@
     }
 
     .save-btn:hover {
-      background: #50ff30;
+      background: #4f46e5;
       transform: translateY(-1px);
-      box-shadow: 0 0 16px rgba(57, 255, 20, 0.4);
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
     }
 
     .toast {
@@ -186,8 +186,8 @@
       bottom: 30px;
       right: 30px;
       background: #181828;
-      border: 1px solid #39ff14;
-      color: #39ff14;
+      border: 1px solid #6366f1;
+      color: #818cf8;
       padding: 12px 20px;
       border-radius: 10px;
       font-weight: 500;
@@ -202,7 +202,7 @@
   <div class="container">
     <div class="header">
       <span class="title-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39ff14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </span>
       <h1>Settings</h1>
     </div>
