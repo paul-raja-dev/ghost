@@ -1004,7 +1004,7 @@ fn main() {
                 });
             }
 
-            // Capture Ctrl+B at GTK window level
+            // Capture universal browser shortcuts at GTK window level (works on all websites)
             #[cfg(target_os = "linux")]
             {
                 if let Some(main_window) = app.get_window("main") {
@@ -1013,9 +1013,84 @@ fn main() {
                         gtk_window.connect_key_press_event(move |_win, event| {
                             let keyval = event.keyval();
                             let ev_state = event.state();
-                            if ev_state.contains(gdk::ModifierType::CONTROL_MASK)
-                                && (keyval == gdk::keys::constants::b || keyval == gdk::keys::constants::B)
+                            let ctrl = ev_state.contains(gdk::ModifierType::CONTROL_MASK);
+                            let shift = ev_state.contains(gdk::ModifierType::SHIFT_MASK);
+                            let alt = ev_state.contains(gdk::ModifierType::MOD1_MASK);
+
+                            use gdk::keys::constants::*;
+
+                            // Ctrl + T (New Tab)
+                            if ctrl && !shift && !alt && (keyval == t || keyval == T) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = create_tab(hc.clone(), st, None);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + Shift + T (Reopen Closed Tab)
+                            if ctrl && shift && !alt && (keyval == t || keyval == T) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = reopen_closed_tab(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + W / Ctrl + F4 (Close Tab)
+                            if (ctrl && !shift && !alt && (keyval == w || keyval == W))
+                                || (ctrl && keyval == F4)
                             {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = close_active_tab(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + Tab / Ctrl + PageDown (Next Tab)
+                            if (ctrl && !shift && keyval == Tab) || (ctrl && keyval == Page_Down) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = next_tab(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + Shift + Tab / Ctrl + PageUp (Prev Tab)
+                            if (ctrl && (keyval == ISO_Left_Tab || (shift && keyval == Tab)))
+                                || (ctrl && keyval == Page_Up)
+                            {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = prev_tab(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + 1..8 (Switch to Tab N)
+                            if ctrl && !shift && !alt {
+                                let idx_opt = match keyval {
+                                    _1 => Some(0),
+                                    _2 => Some(1),
+                                    _3 => Some(2),
+                                    _4 => Some(3),
+                                    _5 => Some(4),
+                                    _6 => Some(5),
+                                    _7 => Some(6),
+                                    _8 => Some(7),
+                                    _9 => Some(999), // Ctrl + 9 switches to last tab
+                                    _ => None,
+                                };
+                                if let Some(idx) = idx_opt {
+                                    let st = hc.state::<Arc<Mutex<AppState>>>();
+                                    let _ = switch_tab_by_index(hc.clone(), st, idx);
+                                    return gtk::glib::Propagation::Stop;
+                                }
+                            }
+
+                            // Ctrl + L / Ctrl + B (Focus URL bar / Toggle toolbar)
+                            if (ctrl && !shift && (keyval == l || keyval == L))
+                                || (alt && (keyval == d || keyval == D))
+                                || keyval == F6
+                            {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = focus_urlbar(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + B (Toggle Toolbar Visibility)
+                            if ctrl && !shift && !alt && (keyval == b || keyval == B) {
                                 let st = hc.state::<Arc<Mutex<AppState>>>();
                                 let mut sg = st.lock().unwrap();
                                 sg.toolbar_visible = !sg.toolbar_visible;
@@ -1027,6 +1102,54 @@ fn main() {
                                 relayout(&hc, &sg);
                                 return gtk::glib::Propagation::Stop;
                             }
+
+                            // Ctrl + R / F5 (Reload)
+                            if (ctrl && !shift && (keyval == r || keyval == R)) || keyval == F5 {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = reload(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Alt + Left / Alt + Right (Go Back / Go Forward)
+                            if alt && (keyval == Left || keyval == KP_Left) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = go_back(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+                            if alt && (keyval == Right || keyval == KP_Right) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = go_forward(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + Shift + I / F12 (Toggle DevTools)
+                            if (ctrl && shift && (keyval == i || keyval == I)) || keyval == F12 {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = toggle_devtools(hc.clone(), st);
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + H (Open History)
+                            if ctrl && !shift && !alt && (keyval == h || keyval == H) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = create_tab(hc.clone(), st, Some("history.html".to_string()));
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + Shift + O (Open Bookmarks)
+                            if ctrl && shift && !alt && (keyval == o || keyval == O) {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = create_tab(hc.clone(), st, Some("bookmarks.html".to_string()));
+                                return gtk::glib::Propagation::Stop;
+                            }
+
+                            // Ctrl + Comma (Open Settings)
+                            if ctrl && !shift && !alt && keyval == comma {
+                                let st = hc.state::<Arc<Mutex<AppState>>>();
+                                let _ = create_tab(hc.clone(), st, Some("settings.html".to_string()));
+                                return gtk::glib::Propagation::Stop;
+                            }
+
                             gtk::glib::Propagation::Proceed
                         });
                     }
